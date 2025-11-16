@@ -1,0 +1,1 @@
+"""SearXNG-powered MCP server."""
