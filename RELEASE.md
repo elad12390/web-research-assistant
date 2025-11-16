@@ -96,10 +96,10 @@ After a few minutes, verify the package is available:
 
 ```bash
 # Check PyPI
-pip install searxng-mcp==0.2.0
+pip install web-research-assistant==0.2.0
 
 # Or browse
-# https://pypi.org/project/searxng-mcp/
+# https://pypi.org/project/web-research-assistant/
 ```
 
 ## Troubleshooting

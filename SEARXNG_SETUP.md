@@ -238,7 +238,7 @@ categories_as_tabs:
 
 3. **Test with the MCP server**:
    ```bash
-   uv run searxng-mcp
+   uv run web-research-assistant
    ```
 
 4. **Verify in Claude Desktop**: You should see all 13 tools available
@@ -447,7 +447,7 @@ With this configuration, `search_examples("React hooks tutorial")` should return
 Once SearXNG is configured:
 
 1. Test it: `curl http://localhost:2288/search?q=python&format=json`
-2. Start the MCP server: `uv run searxng-mcp`
+2. Start the MCP server: `uv run web-research-assistant`
 3. Try the tools in Claude Desktop
 4. Adjust engine configuration based on your needs
 

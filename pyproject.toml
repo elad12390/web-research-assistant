@@ -1,5 +1,5 @@
 [project]
-name = "searxng-mcp"
+name = "web-research-assistant"
 version = "0.1.0"
 description = "Comprehensive MCP server for web research with 13 tools: search, crawl, package info, GitHub stats, error translation, API docs discovery, and more."
 readme = "README.md"
@@ -61,7 +61,7 @@ dev = [
 ]
 
 [project.scripts]
-searxng-mcp = "searxng_mcp.server:main"
+web-research-assistant = "searxng_mcp.server:main"
 
 [tool.uv]
 package = true

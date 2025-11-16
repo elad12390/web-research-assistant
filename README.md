@@ -1,7 +1,7 @@
 # Web Research Assistant MCP Server
 
-[![PyPI](https://img.shields.io/pypi/v/searxng-mcp?color=blue)](https://pypi.org/project/searxng-mcp/)
-[![Python Version](https://img.shields.io/pypi/pyversions/searxng-mcp)](https://pypi.org/project/searxng-mcp/)
+[![PyPI](https://img.shields.io/pypi/v/web-research-assistant?color=blue)](https://pypi.org/project/web-research-assistant/)
+[![Python Version](https://img.shields.io/pypi/pyversions/web-research-assistant)](https://pypi.org/project/web-research-assistant/)
 [![License](https://img.shields.io/github/license/elad12390/web-research-assistant)](https://github.com/elad12390/web-research-assistant/blob/main/LICENSE)
 [![CI](https://github.com/elad12390/web-research-assistant/workflows/CI/badge.svg)](https://github.com/elad12390/web-research-assistant/actions)
 
@@ -45,7 +45,7 @@ uv run crawl4ai-setup  # installs Chromium for crawl4ai
 ## Running the server
 
 ```bash
-uv run searxng-mcp
+uv run web-research-assistant
 ```
 
 By default the server communicates over stdio, which makes it easy to wire into
@@ -62,9 +62,9 @@ Add the server to `~/Library/Application Support/Claude/claude_desktop_config.js
       "command": "uv",
       "args": [
         "--directory",
-        "/ABSOLUTE/PATH/TO/searxng-mcp",
+        "/ABSOLUTE/PATH/TO/web-research-assistant",
         "run",
-        "searxng-mcp"
+        "web-research-assistant"
       ]
     }
   }
@@ -107,7 +107,7 @@ Environment variables let you adapt the server without touching code:
 | `SEARXNG_MAX_RESULTS` | `10` | Hard cap on hits per request. |
 | `SEARXNG_CRAWL_MAX_CHARS` | `8000` | Default character budget for `crawl_url`. |
 | `MCP_MAX_RESPONSE_CHARS` | `8000` | Overall response limit applied to every tool reply. |
-| `SEARXNG_MCP_USER_AGENT` | `searxng-mcp/0.1` | User-Agent header for outward HTTP calls. |
+| `SEARXNG_MCP_USER_AGENT` | `web-research-assistant/0.1` | User-Agent header for outward HTTP calls. |
 | `PIXABAY_API_KEY` | _(empty)_ | API key for Pixabay image search. Get free key at [pixabay.com/api/docs](https://pixabay.com/api/docs/). |
 | `MCP_USAGE_LOG` | `~/.config/web-research-assistant/usage.json` | Location for usage analytics data. |
 
@@ -116,7 +116,7 @@ Environment variables let you adapt the server without touching code:
 The codebase is intentionally modular and organized:
 
 ```
-searxng-mcp/
+web-research-assistant/
 ├── src/searxng_mcp/     # Source code
 │   ├── config.py        # Configuration and environment
 │   ├── search.py        # SearXNG integration

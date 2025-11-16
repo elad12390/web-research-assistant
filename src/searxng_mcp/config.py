@@ -30,7 +30,7 @@ def _env_float(key: str, default: float) -> float:
 
 SEARX_BASE_URL: Final[str] = _env_str("SEARXNG_BASE_URL", "http://localhost:2288/search")
 DEFAULT_CATEGORY: Final[str] = _env_str("SEARXNG_DEFAULT_CATEGORY", "general")
-USER_AGENT: Final[str] = _env_str("SEARXNG_MCP_USER_AGENT", "searxng-mcp/0.1")
+USER_AGENT: Final[str] = _env_str("SEARXNG_MCP_USER_AGENT", "web-research-assistant/0.1")
 HTTP_TIMEOUT: Final[float] = _env_float("SEARXNG_HTTP_TIMEOUT", 15.0)
 MAX_SEARCH_RESULTS: Final[int] = _env_int("SEARXNG_MAX_RESULTS", 10)
 DEFAULT_MAX_RESULTS: Final[int] = _env_int("SEARXNG_DEFAULT_RESULTS", 5)
