@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
 
 import httpx
 
@@ -27,9 +26,7 @@ class SearchHit:
 class SearxSearcher:
     """Minimal async client for the local SearXNG instance."""
 
-    def __init__(
-        self, base_url: str = SEARX_BASE_URL, timeout: float = HTTP_TIMEOUT
-    ) -> None:
+    def __init__(self, base_url: str = SEARX_BASE_URL, timeout: float = HTTP_TIMEOUT) -> None:
         self.base_url = base_url
         self.timeout = timeout
         self._headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
@@ -41,7 +38,7 @@ class SearxSearcher:
         category: str = DEFAULT_CATEGORY,
         max_results: int = DEFAULT_MAX_RESULTS,
         time_range: str | None = None,
-    ) -> List[SearchHit]:
+    ) -> list[SearchHit]:
         """Return up to *max_results* hits for *query* within *category*.
 
         Args:
@@ -63,26 +60,19 @@ class SearxSearcher:
         if time_range:
             params["time_range"] = time_range
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout, headers=self._headers
-        ) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
             response = await client.get(self.base_url, params=params)
             response.raise_for_status()
             payload = response.json()
 
-        hits: List[SearchHit] = []
+        hits: list[SearchHit] = []
         for item in payload.get("results", [])[:limit]:
             title = (
-                item.get("title")
-                or item.get("pretty_url")
-                or item.get("url")
-                or "Untitled"
+                item.get("title") or item.get("pretty_url") or item.get("url") or "Untitled"
             ).strip()
             url = item.get("url") or ""
             snippet = (item.get("content") or item.get("snippet") or "").strip()
-            snippet = (
-                clamp_text(snippet, MAX_SNIPPET_CHARS, suffix="…") if snippet else ""
-            )
+            snippet = clamp_text(snippet, MAX_SNIPPET_CHARS, suffix="…") if snippet else ""
             hits.append(SearchHit(title=title, url=url, snippet=snippet))
 
         return hits

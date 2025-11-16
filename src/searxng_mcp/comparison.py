@@ -59,9 +59,7 @@ class TechComparator:
         self.github_client = github_client
         self.registry_client = registry_client
 
-    async def gather_info(
-        self, technology: str, category: str, aspects: list[str]
-    ) -> TechInfo:
+    async def gather_info(self, technology: str, category: str, aspects: list[str]) -> TechInfo:
         """Gather information about a single technology.
 
         Uses multiple sources:
@@ -100,9 +98,7 @@ class TechComparator:
 
         return info
 
-    async def _search_overview(
-        self, info: TechInfo, technology: str, category: str
-    ) -> None:
+    async def _search_overview(self, info: TechInfo, technology: str, category: str) -> None:
         """Search for overview information."""
         overview_query = f"{technology} {category} overview features"
         try:
@@ -126,9 +122,7 @@ class TechComparator:
         """Search for a specific aspect."""
         search_term = self._aspect_to_search_term(aspect, technology, category)
         try:
-            results = await self.searcher.search(
-                search_term, category="general", max_results=2
-            )
+            results = await self.searcher.search(search_term, category="general", max_results=2)
             if results:
                 aspect_info = self._extract_aspect_info(results, aspect)
                 if aspect_info:
@@ -139,9 +133,7 @@ class TechComparator:
         except Exception:
             pass
 
-    def _aspect_to_search_term(
-        self, aspect: str, technology: str, category: str
-    ) -> str:
+    def _aspect_to_search_term(self, aspect: str, technology: str, category: str) -> str:
         """Convert aspect to search term.
 
         Args:
@@ -336,19 +328,15 @@ class TechComparator:
                     if pkg_info.downloads:
                         downloads = pkg_info.downloads
                         current_pop = info.popularity or ""
-                        info.popularity = (
-                            f"{current_pop}, {registry.upper()}: {downloads}".strip(
-                                ", "
-                            )
+                        info.popularity = f"{current_pop}, {registry.upper()}: {downloads}".strip(
+                            ", "
                         )
 
                     # Add ecosystem info
                     if pkg_info.dependencies:
                         dep_count = len(pkg_info.dependencies)
                         current_eco = info.ecosystem or ""
-                        info.ecosystem = (
-                            f"{current_eco}, {dep_count} dependencies".strip(", ")
-                        )
+                        info.ecosystem = f"{current_eco}, {dep_count} dependencies".strip(", ")
 
                     break  # Found it!
             except Exception:
@@ -380,9 +368,7 @@ class TechComparator:
                 if value:
                     if isinstance(value, list):
                         # Join list items
-                        comparison["aspects"][aspect][tech.name] = ", ".join(
-                            value[:3]
-                        )  # Max 3
+                        comparison["aspects"][aspect][tech.name] = ", ".join(value[:3])  # Max 3
                     else:
                         comparison["aspects"][aspect][tech.name] = value
                 else:

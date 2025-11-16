@@ -30,6 +30,7 @@ for optimal AI agent integration.
 
 - Python 3.10+
 - A running SearXNG instance listening on `http://localhost:2288`
+  - **See [SEARXNG_SETUP.md](SEARXNG_SETUP.md) for complete SearXNG setup guide with Docker**
 - Playwright browsers for crawl4ai (one-time setup)
 - (Optional) Pixabay API key for image search - get one free at [pixabay.com/api/docs](https://pixabay.com/api/docs/)
 

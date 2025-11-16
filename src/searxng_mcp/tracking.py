@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from .config import _env_str
 
@@ -14,9 +13,7 @@ class UsageTracker:
 
     def __init__(self) -> None:
         # Get tracking file path from env or use default in user's home directory
-        default_path = str(
-            Path.home() / ".config" / "web-research-assistant" / "usage.json"
-        )
+        default_path = str(Path.home() / ".config" / "web-research-assistant" / "usage.json")
         self.log_file = Path(_env_str("MCP_USAGE_LOG", default_path))
         self._ensure_log_file()
 
@@ -36,17 +33,17 @@ class UsageTracker:
             }
             self._write_log(initial_data)
 
-    def _read_log(self) -> Dict[str, Any]:
+    def _read_log(self) -> dict[str, Any]:
         """Read current log data."""
         try:
-            with open(self.log_file, "r", encoding="utf-8") as f:
+            with open(self.log_file, encoding="utf-8") as f:
                 return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             # Reset if corrupted
             self._ensure_log_file()
             return self._read_log()
 
-    def _write_log(self, data: Dict[str, Any]) -> None:
+    def _write_log(self, data: dict[str, Any]) -> None:
         """Write log data to file."""
         # Ensure directory exists
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -58,7 +55,7 @@ class UsageTracker:
         self,
         tool_name: str,
         reasoning: str,
-        parameters: Dict[str, Any],
+        parameters: dict[str, Any],
         response_time_ms: float,
         success: bool,
         error_message: str | None = None,
@@ -101,9 +98,7 @@ class UsageTracker:
         if success:
             tool_stats["success_count"] += 1
         tool_stats["total_response_time"] += response_time_ms
-        tool_stats["avg_response_time"] = (
-            tool_stats["total_response_time"] / tool_stats["count"]
-        )
+        tool_stats["avg_response_time"] = tool_stats["total_response_time"] / tool_stats["count"]
 
         # Track reasoning patterns
         reasoning_key = reasoning[:50]  # Truncate for grouping
@@ -122,9 +117,7 @@ class UsageTracker:
         total_time = sum(
             stats["total_response_time"] for stats in data["summary"]["tools"].values()
         )
-        data["summary"]["average_response_time"] = (
-            total_time / data["summary"]["total_calls"]
-        )
+        data["summary"]["average_response_time"] = total_time / data["summary"]["total_calls"]
 
         self._write_log(data)
 
@@ -133,17 +126,17 @@ class UsageTracker:
         # Simple session ID based on current hour
         return datetime.now(timezone.utc).strftime("%Y%m%d_%H")
 
-    def get_usage_summary(self) -> Dict[str, Any]:
+    def get_usage_summary(self) -> dict[str, Any]:
         """Get current usage summary."""
         data = self._read_log()
         return data["summary"]
 
-    def get_tool_analytics(self, tool_name: str) -> Dict[str, Any] | None:
+    def get_tool_analytics(self, tool_name: str) -> dict[str, Any] | None:
         """Get detailed analytics for a specific tool."""
         data = self._read_log()
         return data["summary"]["tools"].get(tool_name)
 
-    def get_recent_usage(self, hours: int = 24) -> list[Dict[str, Any]]:
+    def get_recent_usage(self, hours: int = 24) -> list[dict[str, Any]]:
         """Get usage from the last N hours."""
         data = self._read_log()
 
@@ -175,22 +168,18 @@ class UsageTracker:
         ]
 
         # Sort tools by usage count
-        sorted_tools = sorted(
-            summary["tools"].items(), key=lambda x: x[1]["count"], reverse=True
-        )
+        sorted_tools = sorted(summary["tools"].items(), key=lambda x: x[1]["count"], reverse=True)
 
         for tool_name, stats in sorted_tools:
             success_rate = (
-                (stats["success_count"] / stats["count"]) * 100
-                if stats["count"] > 0
-                else 0
+                (stats["success_count"] / stats["count"]) * 100 if stats["count"] > 0 else 0
             )
             lines.extend(
                 [
                     f"### {tool_name}",
                     f"- Calls: {stats['count']} ({success_rate:.1f}% success rate)",
                     f"- Avg response time: {stats['avg_response_time']:.1f}ms",
-                    f"- Common reasons:",
+                    "- Common reasons:",
                 ]
             )
 

@@ -28,9 +28,7 @@ def _env_float(key: str, default: float) -> float:
         return default
 
 
-SEARX_BASE_URL: Final[str] = _env_str(
-    "SEARXNG_BASE_URL", "http://localhost:2288/search"
-)
+SEARX_BASE_URL: Final[str] = _env_str("SEARXNG_BASE_URL", "http://localhost:2288/search")
 DEFAULT_CATEGORY: Final[str] = _env_str("SEARXNG_DEFAULT_CATEGORY", "general")
 USER_AGENT: Final[str] = _env_str("SEARXNG_MCP_USER_AGENT", "searxng-mcp/0.1")
 HTTP_TIMEOUT: Final[float] = _env_float("SEARXNG_HTTP_TIMEOUT", 15.0)
@@ -47,9 +45,7 @@ TRUNCATION_SUFFIX: Final[str] = (
 )
 
 
-def clamp_text(
-    text: str, limit: int = MAX_RESPONSE_CHARS, *, suffix: str | None = None
-) -> str:
+def clamp_text(text: str, limit: int = MAX_RESPONSE_CHARS, *, suffix: str | None = None) -> str:
     """Trim *text* to *limit* characters and append the provided suffix when truncated."""
 
     if limit <= 0 or len(text) <= limit:

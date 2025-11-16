@@ -1,8 +1,9 @@
 """Pixabay API client for stock image search."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Literal
+from typing import Literal
 
 import httpx
 
@@ -12,7 +13,7 @@ from .config import HTTP_TIMEOUT, PIXABAY_API_KEY, USER_AGENT
 @dataclass(slots=True)
 class StockImage:
     """Represents a stock image result from Pixabay."""
-    
+
     id: int
     preview_url: str
     large_url: str
@@ -29,18 +30,18 @@ class StockImage:
 
 class PixabayClient:
     """Client for searching stock images on Pixabay."""
-    
+
     BASE_URL = "https://pixabay.com/api/"
-    
+
     def __init__(self, api_key: str = PIXABAY_API_KEY, timeout: float = HTTP_TIMEOUT) -> None:
         self.api_key = api_key
         self.timeout = timeout
         self._headers = {"User-Agent": USER_AGENT}
-    
+
     def has_api_key(self) -> bool:
         """Check if API key is configured."""
         return bool(self.api_key)
-    
+
     async def search_images(
         self,
         query: str,
@@ -54,10 +55,10 @@ class PixabayClient:
         safe_search: bool = True,
         per_page: int = 20,
         page: int = 1,
-    ) -> List[StockImage]:
+    ) -> list[StockImage]:
         """
         Search for stock images on Pixabay.
-        
+
         Args:
             query: Search term
             image_type: Type of image (all, photo, illustration, vector)
@@ -69,13 +70,13 @@ class PixabayClient:
             safe_search: Enable safe search
             per_page: Images per page (3-200)
             page: Page number
-            
+
         Returns:
             List of StockImage objects
         """
         if not self.has_api_key():
             raise ValueError("Pixabay API key not configured")
-        
+
         params = {
             "key": self.api_key,
             "q": query,
@@ -84,7 +85,7 @@ class PixabayClient:
             "page": page,
             "safesearch": "true" if safe_search else "false",
         }
-        
+
         # Add optional filters
         if orientation != "all":
             params["orientation"] = orientation
@@ -96,27 +97,29 @@ class PixabayClient:
             params["min_height"] = min_height
         if colors:
             params["colors"] = colors
-        
+
         async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
             response = await client.get(self.BASE_URL, params=params)
             response.raise_for_status()
             data = response.json()
-        
+
         images = []
         for hit in data.get("hits", []):
-            images.append(StockImage(
-                id=hit["id"],
-                preview_url=hit["previewURL"],
-                large_url=hit["largeImageURL"],
-                full_url=hit.get("fullHDURL") or hit["largeImageURL"],
-                width=hit["imageWidth"],
-                height=hit["imageHeight"],
-                views=hit["views"],
-                downloads=hit["downloads"],
-                likes=hit["likes"],
-                tags=hit["tags"],
-                user=hit["user"],
-                user_id=hit["user_id"],
-            ))
-        
+            images.append(
+                StockImage(
+                    id=hit["id"],
+                    preview_url=hit["previewURL"],
+                    large_url=hit["largeImageURL"],
+                    full_url=hit.get("fullHDURL") or hit["largeImageURL"],
+                    width=hit["imageWidth"],
+                    height=hit["imageHeight"],
+                    views=hit["views"],
+                    downloads=hit["downloads"],
+                    likes=hit["likes"],
+                    tags=hit["tags"],
+                    user=hit["user"],
+                    user_id=hit["user_id"],
+                )
+            )
+
         return images

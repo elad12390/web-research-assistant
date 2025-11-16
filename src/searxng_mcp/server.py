@@ -8,26 +8,25 @@ from typing import Annotated, Literal
 import httpx
 from mcp.server.fastmcp import FastMCP
 
+from .api_docs import APIDocsDetector, APIDocsExtractor, APIDocumentation
+from .changelog import ChangelogFetcher
+from .comparison import CATEGORY_ASPECTS, TechComparator, detect_category
 from .config import (
     CRAWL_MAX_CHARS,
     DEFAULT_CATEGORY,
     DEFAULT_MAX_RESULTS,
     MAX_RESPONSE_CHARS,
-    PIXABAY_API_KEY,
     clamp_text,
 )
-from .changelog import ChangelogFetcher
-from .comparison import CATEGORY_ASPECTS, TechComparator, detect_category
 from .crawler import CrawlerClient
 from .errors import ErrorParser
 from .extractor import DataExtractor
 from .github import GitHubClient, RepoInfo
-from .images import PixabayClient, StockImage
+from .images import PixabayClient
 from .registry import PackageInfo, PackageRegistryClient
 from .search import SearxSearcher
 from .service_health import ServiceHealthChecker
 from .tracking import get_tracker
-from .api_docs import APIDocsDetector, APIDocsExtractor, APIDocumentation
 
 mcp = FastMCP("web-research-assistant")
 searcher = SearxSearcher()
@@ -61,9 +60,7 @@ async def web_search(
     category: Annotated[
         str, "Optional SearXNG category (general, images, news, it, science, etc.)"
     ] = DEFAULT_CATEGORY,
-    max_results: Annotated[
-        int, "How many ranked hits to return (1-10)"
-    ] = DEFAULT_MAX_RESULTS,
+    max_results: Annotated[int, "How many ranked hits to return (1-10)"] = DEFAULT_MAX_RESULTS,
 ) -> str:
     """Use this first to gather fresh web search results via the local SearXNG instance."""
 
@@ -106,9 +103,7 @@ async def web_search(
 async def crawl_url(
     url: Annotated[str, "HTTP(S) URL (ideally from web_search output)"],
     reasoning: Annotated[str, "Why you're crawling this URL (required for analytics)"],
-    max_chars: Annotated[
-        int, "Trim textual result to this many characters"
-    ] = CRAWL_MAX_CHARS,
+    max_chars: Annotated[int, "Trim textual result to this many characters"] = CRAWL_MAX_CHARS,
 ) -> str:
     """Fetch a URL with crawl4ai when you need the actual page text for quoting or analysis."""
 
@@ -182,9 +177,7 @@ def _format_package_info(info: PackageInfo) -> str:
 @mcp.tool()
 async def package_info(
     name: Annotated[str, "Package or module name to look up"],
-    reasoning: Annotated[
-        str, "Why you're looking up this package (required for analytics)"
-    ],
+    reasoning: Annotated[str, "Why you're looking up this package (required for analytics)"],
     registry: Annotated[
         Literal["npm", "pypi", "crates", "go"],
         "Package registry to search (npm, pypi, crates, go)",
@@ -249,9 +242,7 @@ async def search_examples(
         str,
         "What you're looking for (e.g., 'Python async await examples', 'React hooks tutorial', 'Rust error handling patterns')",
     ],
-    reasoning: Annotated[
-        str, "Why you're searching for examples (required for analytics)"
-    ],
+    reasoning: Annotated[str, "Why you're searching for examples (required for analytics)"],
     content_type: Annotated[
         Literal["code", "articles", "both"],
         "Type of content to find: 'code' for code examples, 'articles' for tutorials/blogs, 'both' for mixed results",
@@ -260,9 +251,7 @@ async def search_examples(
         Literal["day", "week", "month", "year", "all"],
         "How recent the content should be (use 'all' for best results, filter down if too many results)",
     ] = "all",
-    max_results: Annotated[
-        int, "How many results to return (1-10)"
-    ] = DEFAULT_MAX_RESULTS,
+    max_results: Annotated[int, "How many results to return (1-10)"] = DEFAULT_MAX_RESULTS,
 ) -> str:
     """
     Search for code examples, tutorials, and technical articles.
@@ -300,7 +289,9 @@ async def search_examples(
             enhanced_query = f"{query} (site:github.com OR site:stackoverflow.com OR site:gist.github.com OR example OR snippet)"
         elif content_type == "articles":
             # Prioritize articles and tutorials
-            enhanced_query = f"{query} (tutorial OR guide OR article OR blog OR how to OR documentation)"
+            enhanced_query = (
+                f"{query} (tutorial OR guide OR article OR blog OR how to OR documentation)"
+            )
         else:  # both
             enhanced_query = f"{query} (example OR tutorial OR guide)"
 
@@ -396,9 +387,7 @@ async def search_images(
         str,
         "What to search for (e.g., 'sunset beach', 'office workspace', 'technology abstract')",
     ],
-    reasoning: Annotated[
-        str, "Why you're searching for images (required for analytics)"
-    ],
+    reasoning: Annotated[str, "Why you're searching for images (required for analytics)"],
     image_type: Annotated[
         Literal["all", "photo", "illustration", "vector"],
         "Type of image to search for",
@@ -441,9 +430,9 @@ async def search_images(
                 "1. Get a free API key from: https://pixabay.com/api/docs/\n"
                 "2. Set the environment variable: PIXABAY_API_KEY=your_key_here\n"
                 "3. Restart the MCP server\n\n"
-                f"You can set it in your shell:\n"
-                f"  export PIXABAY_API_KEY='your_key_here'\n\n"
-                f"Or add it to your MCP server configuration in OpenCode/Claude Desktop config."
+                "You can set it in your shell:\n"
+                "  export PIXABAY_API_KEY='your_key_here'\n\n"
+                "Or add it to your MCP server configuration in OpenCode/Claude Desktop config."
             )
             # Track as failure
             error_msg = "API key not configured"
@@ -521,9 +510,7 @@ async def search_images(
     return result
 
 
-def _format_package_search_results(
-    packages: list[PackageInfo], query: str, registry: str
-) -> str:
+def _format_package_search_results(packages: list[PackageInfo], query: str, registry: str) -> str:
     """Format package search results into readable text."""
 
     if not packages:
@@ -542,11 +529,7 @@ def _format_package_search_results(
             lines.append(f"   Downloads: {pkg.downloads}")
         if pkg.description:
             # Truncate long descriptions
-            desc = (
-                pkg.description[:100] + "..."
-                if len(pkg.description) > 100
-                else pkg.description
-            )
+            desc = pkg.description[:100] + "..." if len(pkg.description) > 100 else pkg.description
             lines.append(f"   Description: {desc}")
         lines.append("")  # blank line between results
 
@@ -559,9 +542,7 @@ async def package_search(
         str,
         "Search keywords (e.g., 'web framework', 'json parser', 'machine learning')",
     ],
-    reasoning: Annotated[
-        str, "Why you're searching for packages (required for analytics)"
-    ],
+    reasoning: Annotated[str, "Why you're searching for packages (required for analytics)"],
     registry: Annotated[
         Literal["npm", "pypi", "crates", "go"],
         "Package registry to search (npm, pypi, crates, go)",
@@ -660,9 +641,7 @@ def _format_repo_info(info: RepoInfo, commits=None) -> str:
 @mcp.tool()
 async def github_repo(
     repo: Annotated[str, "GitHub repository (owner/repo format or full URL)"],
-    reasoning: Annotated[
-        str, "Why you're checking this repository (required for analytics)"
-    ],
+    reasoning: Annotated[str, "Why you're checking this repository (required for analytics)"],
     include_commits: Annotated[bool, "Include recent commit history"] = True,
 ) -> str:
     """
@@ -690,9 +669,7 @@ async def github_repo(
         commits = None
         if include_commits:
             try:
-                commits = await github_client.get_recent_commits(
-                    owner, repo_name, count=3
-                )
+                commits = await github_client.get_recent_commits(owner, repo_name, count=3)
             except Exception:  # noqa: BLE001, S110
                 # Don't fail the whole request if commits fail
                 pass
@@ -707,9 +684,7 @@ async def github_repo(
         elif exc.response.status_code == 403:
             result = f"Access denied to repository '{repo}'.\n\nThe repository might be private or you've hit rate limits."
         else:
-            result = (
-                f"Failed to fetch repository '{repo}': HTTP {exc.response.status_code}"
-            )
+            result = f"Failed to fetch repository '{repo}': HTTP {exc.response.status_code}"
     except ValueError as exc:
         error_msg = str(exc)
         result = str(exc)  # Invalid repo format
@@ -735,12 +710,8 @@ async def github_repo(
 @mcp.tool()
 async def translate_error(
     error_message: Annotated[str, "The error message or stack trace to investigate"],
-    reasoning: Annotated[
-        str, "Why you're investigating this error (required for analytics)"
-    ],
-    language: Annotated[
-        str | None, "Programming language (auto-detected if not provided)"
-    ] = None,
+    reasoning: Annotated[str, "Why you're investigating this error (required for analytics)"],
+    language: Annotated[str | None, "Programming language (auto-detected if not provided)"] = None,
     framework: Annotated[
         str | None, "Framework context (e.g., 'React', 'FastAPI', 'Django')"
     ] = None,
@@ -774,9 +745,7 @@ async def translate_error(
         max_results = max(1, min(max_results, 10))
 
         # Parse the error message
-        parsed = error_parser.parse(
-            error_message, language=language, framework=framework
-        )
+        parsed = error_parser.parse(error_message, language=language, framework=framework)
 
         # Build search query
         search_query = error_parser.build_search_query(parsed)
@@ -807,9 +776,7 @@ async def translate_error(
 
             # Prioritize Stack Overflow results
             so_hits = [hit for hit in filtered_hits if "stackoverflow.com" in hit.url]
-            other_hits = [
-                hit for hit in filtered_hits if "stackoverflow.com" not in hit.url
-            ]
+            other_hits = [hit for hit in filtered_hits if "stackoverflow.com" not in hit.url]
 
             # Combine: Stack Overflow first, then others
             hits = (so_hits + other_hits)[:max_results]
@@ -832,7 +799,7 @@ async def translate_error(
                 "Error Translation Results",
                 "═" * 70,
                 "",
-                f"📋 Parsed Error Information:",
+                "📋 Parsed Error Information:",
                 f"   Error Type: {parsed.error_type}",
             ]
 
@@ -851,7 +818,7 @@ async def translate_error(
                     "",
                     f"🔍 Search Query: {search_query}",
                     "",
-                    f"💡 Top Solutions (Stack Overflow prioritized):",
+                    "💡 Top Solutions (Stack Overflow prioritized):",
                     "─" * 70,
                     "",
                 ]
@@ -861,9 +828,7 @@ async def translate_error(
                 # Try to extract vote count from snippet (if available)
                 votes = "N/A"
                 if hit.snippet:
-                    vote_match = re.search(
-                        r"(\d+)\s*votes?", hit.snippet, re.IGNORECASE
-                    )
+                    vote_match = re.search(r"(\d+)\s*votes?", hit.snippet, re.IGNORECASE)
                     if vote_match:
                         votes = vote_match.group(1)
 
@@ -928,9 +893,7 @@ async def translate_error(
 @mcp.tool()
 async def api_docs(
     api_name: Annotated[str, "API name (e.g., 'stripe', 'github') or base docs URL"],
-    reasoning: Annotated[
-        str, "Why you're looking up this API (required for analytics)"
-    ],
+    reasoning: Annotated[str, "Why you're looking up this API (required for analytics)"],
     topic: Annotated[
         str,
         "What to search for (e.g., 'create customer', 'webhooks', 'authentication')",
@@ -1027,9 +990,7 @@ async def api_docs(
 
                 for doc_result in doc_results[:max_results]:
                     try:
-                        content = await crawler_client.fetch(
-                            doc_result.url, max_chars=12000
-                        )
+                        content = await crawler_client.fetch(doc_result.url, max_chars=12000)
                         all_content.append(content)
                         source_urls.append(doc_result.url)
                     except Exception:  # noqa: BLE001
@@ -1037,7 +998,9 @@ async def api_docs(
                         pass
 
                 if not all_content:
-                    result = f"Failed to fetch documentation pages. Try browsing directly: {docs_url}"
+                    result = (
+                        f"Failed to fetch documentation pages. Try browsing directly: {docs_url}"
+                    )
                     error_msg = "Failed to crawl docs"
                     success = False
                 else:
@@ -1049,9 +1012,7 @@ async def api_docs(
                     parameters = api_docs_extractor.extract_parameters(combined_content)
                     examples = api_docs_extractor.extract_examples(combined_content)
                     notes = api_docs_extractor.extract_notes(combined_content)
-                    related_links = api_docs_extractor.extract_links(
-                        combined_content, docs_url
-                    )
+                    related_links = api_docs_extractor.extract_links(combined_content, docs_url)
 
                     # Create documentation object
                     doc = APIDocumentation(
@@ -1098,9 +1059,7 @@ async def api_docs(
 @mcp.tool()
 async def extract_data(
     url: Annotated[str, "HTTP(S) URL to extract structured data from"],
-    reasoning: Annotated[
-        str, "Why you're extracting data from this URL (required for analytics)"
-    ],
+    reasoning: Annotated[str, "Why you're extracting data from this URL (required for analytics)"],
     extract_type: Annotated[
         Literal["table", "list", "fields", "json-ld", "auto"],
         'Extraction type: "table", "list", "fields", "json-ld", or "auto"',
@@ -1164,16 +1123,12 @@ async def extract_data(
             lists = data_extractor.extract_lists(html, max_lists=max_items)
             extracted_data = {
                 "type": "list",
-                "lists": [
-                    {"title": li.title, "items": li.items[:max_items]} for li in lists
-                ],
+                "lists": [{"title": li.title, "items": li.items[:max_items]} for li in lists],
                 "source": url,
             }
         elif extract_type == "fields":
             if not selectors:
-                raise ValueError(
-                    "selectors parameter is required for extract_type='fields'"
-                )
+                raise ValueError("selectors parameter is required for extract_type='fields'")
             fields = data_extractor.extract_fields(html, selectors)
             extracted_data = {"type": "fields", "data": fields, "source": url}
         elif extract_type == "json-ld":
@@ -1216,9 +1171,7 @@ async def extract_data(
 @mcp.tool()
 async def compare_tech(
     technologies: Annotated[list[str], "List of 2-5 technologies to compare"],
-    reasoning: Annotated[
-        str, "Why you're comparing these technologies (required for analytics)"
-    ],
+    reasoning: Annotated[str, "Why you're comparing these technologies (required for analytics)"],
     category: Annotated[
         Literal["framework", "library", "database", "language", "tool", "auto"],
         'Technology category (auto-detects if "auto")',
@@ -1278,9 +1231,7 @@ async def compare_tech(
         # Gather info for each technology
         tech_infos = []
         for tech in technologies:
-            info = await tech_comparator.gather_info(
-                tech, detected_category, selected_aspects
-            )
+            info = await tech_comparator.gather_info(tech, detected_category, selected_aspects)
             tech_infos.append(info)
 
         # Build comparison
@@ -1339,9 +1290,7 @@ async def get_changelog(
             detected_registry = "npm"  # Default to npm
 
         # Fetch changelog
-        changelog = await changelog_fetcher.get_changelog(
-            package, detected_registry, max_releases
-        )
+        changelog = await changelog_fetcher.get_changelog(package, detected_registry, max_releases)
 
         result = json.dumps(changelog, indent=2, ensure_ascii=False)
         result = clamp_text(result, MAX_RESPONSE_CHARS)

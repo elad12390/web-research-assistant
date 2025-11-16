@@ -103,11 +103,7 @@ class StatusPageParser:
 
         for indicator in status_indicators:
             if indicator:
-                text = (
-                    indicator.get_text()
-                    if hasattr(indicator, "get_text")
-                    else str(indicator)
-                )
+                text = indicator.get_text() if hasattr(indicator, "get_text") else str(indicator)
                 status.status = self._normalize_status(text)
                 if status.status != "unknown":
                     break
@@ -115,10 +111,7 @@ class StatusPageParser:
         # If still unknown, check for keywords in page
         html_lower = html.lower()
         if status.status == "unknown":
-            if (
-                "all systems operational" in html_lower
-                or "all systems normal" in html_lower
-            ):
+            if "all systems operational" in html_lower or "all systems normal" in html_lower:
                 status.status = "operational"
             elif "no active incidents" in html_lower or "no incidents" in html_lower:
                 status.status = "operational"
@@ -130,9 +123,7 @@ class StatusPageParser:
                 status.status = "under_maintenance"
 
         # Extract current incidents
-        incident_elements = soup.find_all(
-            ["div", "section"], class_=re.compile(r"incident", re.I)
-        )
+        incident_elements = soup.find_all(["div", "section"], class_=re.compile(r"incident", re.I))
         for incident in incident_elements[:3]:  # Max 3
             title_elem = incident.find(
                 ["h3", "h4", "span"], class_=re.compile(r"(title|name)", re.I)
@@ -160,17 +151,14 @@ class StatusPageParser:
         status_lower = status_text.lower()
 
         if any(
-            word in status_lower
-            for word in ["operational", "normal", "ok", "all systems", "up"]
+            word in status_lower for word in ["operational", "normal", "ok", "all systems", "up"]
         ):
             return "operational"
         elif any(word in status_lower for word in ["degraded", "slow", "performance"]):
             return "degraded_performance"
         elif any(word in status_lower for word in ["partial", "some", "limited"]):
             return "partial_outage"
-        elif any(
-            word in status_lower for word in ["major", "down", "outage", "offline"]
-        ):
+        elif any(word in status_lower for word in ["major", "down", "outage", "offline"]):
             return "major_outage"
         elif "maintenance" in status_lower:
             return "under_maintenance"
@@ -252,8 +240,7 @@ class ServiceHealthChecker:
 
         if status.components:
             response["components"] = [
-                {"name": comp.name, "status": comp.status}
-                for comp in status.components[:10]
+                {"name": comp.name, "status": comp.status} for comp in status.components[:10]
             ]
 
         return response

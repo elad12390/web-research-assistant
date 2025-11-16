@@ -68,27 +68,21 @@ class DataExtractor:
         for table in soup.find_all("table")[:max_tables]:
             # Extract caption
             caption_elem = table.find("caption")
-            caption = (
-                _sanitize_text(caption_elem.get_text(strip=True))
-                if caption_elem
-                else None
-            )
+            caption = _sanitize_text(caption_elem.get_text(strip=True)) if caption_elem else None
 
             # Extract headers
             headers = []
             header_row = table.find("thead")
             if header_row:
                 headers = [
-                    _sanitize_text(th.get_text(strip=True))
-                    for th in header_row.find_all("th")
+                    _sanitize_text(th.get_text(strip=True)) for th in header_row.find_all("th")
                 ]
             else:
                 # Try first row
                 first_row = table.find("tr")
                 if first_row:
                     headers = [
-                        _sanitize_text(th.get_text(strip=True))
-                        for th in first_row.find_all("th")
+                        _sanitize_text(th.get_text(strip=True)) for th in first_row.find_all("th")
                     ]
 
             # If no headers found, use generic column names
@@ -165,9 +159,7 @@ class DataExtractor:
 
         return lists
 
-    def extract_fields(
-        self, html: str, selectors: dict[str, str]
-    ) -> dict[str, str | list[str]]:
+    def extract_fields(self, html: str, selectors: dict[str, str]) -> dict[str, str | list[str]]:
         """Extract specific fields using CSS selectors.
 
         Args:
@@ -186,9 +178,7 @@ class DataExtractor:
                 if len(elements) == 1:
                     data[field_name] = _sanitize_text(elements[0].get_text(strip=True))
                 else:
-                    data[field_name] = [
-                        _sanitize_text(el.get_text(strip=True)) for el in elements
-                    ]
+                    data[field_name] = [_sanitize_text(el.get_text(strip=True)) for el in elements]
 
         return data
 
@@ -235,8 +225,7 @@ class DataExtractor:
         tables = self.extract_tables(html, max_tables=3)
         if tables:
             results["tables"] = [
-                {"caption": t.caption, "headers": t.headers, "rows": t.rows}
-                for t in tables
+                {"caption": t.caption, "headers": t.headers, "rows": t.rows} for t in tables
             ]
 
         # Extract lists

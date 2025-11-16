@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -62,7 +61,7 @@ class APIDocsDetector:
             headers={"User-Agent": "Mozilla/5.0 (compatible; API-Docs-Explorer/1.0)"},
         )
 
-    async def find_docs_url(self, api_name: str) -> Optional[str]:
+    async def find_docs_url(self, api_name: str) -> str | None:
         """
         Dynamically find the official documentation URL for an API.
 

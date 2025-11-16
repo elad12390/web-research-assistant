@@ -53,9 +53,7 @@ class PackageRegistryClient:
         url = "https://registry.npmjs.org/-/v1/search"
         params = {"text": query, "size": max_results}
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout, headers=self._headers
-        ) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()
             data = response.json()
@@ -99,9 +97,7 @@ class PackageRegistryClient:
                 "per_page": max_results,
             }
 
-            async with httpx.AsyncClient(
-                timeout=self.timeout, headers=self._headers
-            ) as client:
+            async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
                 response = await client.get(url, params=params)
                 response.raise_for_status()
                 data = response.json()
@@ -110,7 +106,6 @@ class PackageRegistryClient:
             for repo in data.get("items", []):
                 # Use the repo name as potential PyPI package name
                 name = repo.get("name", "")
-                full_name = repo.get("full_name", "")
 
                 # Many GitHub repos have the same name as their PyPI package
                 packages.append(
@@ -140,9 +135,7 @@ class PackageRegistryClient:
         url = "https://crates.io/api/v1/crates"
         params = {"q": query, "per_page": max_results}
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout, headers=self._headers
-        ) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()
             data = response.json()
@@ -182,9 +175,7 @@ class PackageRegistryClient:
                 "per_page": max_results,
             }
 
-            async with httpx.AsyncClient(
-                timeout=self.timeout, headers=self._headers
-            ) as client:
+            async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
                 response = await client.get(url, params=params)
                 response.raise_for_status()
                 data = response.json()
@@ -221,9 +212,7 @@ class PackageRegistryClient:
 
         url = f"https://registry.npmjs.org/{name}"
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout, headers=self._headers
-        ) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
             response = await client.get(url)
             response.raise_for_status()
             data = response.json()
@@ -236,9 +225,7 @@ class PackageRegistryClient:
 
         # Parse last update time
         time_data = data.get("time", {})
-        last_updated = time_data.get(latest_version) or time_data.get(
-            "modified", "unknown"
-        )
+        last_updated = time_data.get(latest_version) or time_data.get("modified", "unknown")
         if last_updated != "unknown":
             last_updated = self._format_time_ago(last_updated)
 
@@ -286,9 +273,7 @@ class PackageRegistryClient:
 
         url = f"https://pypi.org/pypi/{name}/json"
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout, headers=self._headers
-        ) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
             response = await client.get(url)
             response.raise_for_status()
             data = response.json()
@@ -344,9 +329,7 @@ class PackageRegistryClient:
 
         url = f"https://crates.io/api/v1/crates/{name}"
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout, headers=self._headers
-        ) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
             response = await client.get(url)
             response.raise_for_status()
             data = response.json()
@@ -379,9 +362,7 @@ class PackageRegistryClient:
         # Get latest version
         latest_url = f"https://proxy.golang.org/{module}/@latest"
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout, headers=self._headers
-        ) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
             response = await client.get(latest_url)
             response.raise_for_status()
             data = response.json()

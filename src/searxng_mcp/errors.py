@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass(slots=True)
@@ -13,10 +12,10 @@ class ParsedError:
 
     error_type: str
     message: str
-    language: Optional[str]
-    framework: Optional[str]
-    file_path: Optional[str]
-    line_number: Optional[int]
+    language: str | None
+    framework: str | None
+    file_path: str | None
+    line_number: int | None
     key_terms: list[str]
 
 
@@ -115,8 +114,8 @@ class ErrorParser:
     def parse(
         self,
         error_message: str,
-        language: Optional[str] = None,
-        framework: Optional[str] = None,
+        language: str | None = None,
+        framework: str | None = None,
     ) -> ParsedError:
         """
         Parse an error message to extract key information.
@@ -159,15 +158,11 @@ class ErrorParser:
             key_terms=key_terms,
         )
 
-    def _detect_language(self, text: str) -> Optional[str]:
+    def _detect_language(self, text: str) -> str | None:
         """Detect programming language from error message."""
-        text_lower = text.lower()
-
         scores = {}
         for lang, patterns in self.LANGUAGE_PATTERNS.items():
-            score = sum(
-                1 for pattern in patterns if re.search(pattern, text, re.IGNORECASE)
-            )
+            score = sum(1 for pattern in patterns if re.search(pattern, text, re.IGNORECASE))
             if score > 0:
                 scores[lang] = score
 
@@ -175,7 +170,7 @@ class ErrorParser:
             return max(scores, key=scores.get)
         return None
 
-    def _detect_framework(self, text: str) -> Optional[str]:
+    def _detect_framework(self, text: str) -> str | None:
         """Detect framework from error message."""
         text_lower = text.lower()
 
@@ -184,7 +179,7 @@ class ErrorParser:
                 return framework
         return None
 
-    def _extract_error_type(self, text: str, language: Optional[str]) -> Optional[str]:
+    def _extract_error_type(self, text: str, language: str | None) -> str | None:
         """Extract the error type/name."""
         # Check for common web errors first (language-agnostic)
         web_error_patterns = {
@@ -210,7 +205,7 @@ class ErrorParser:
 
         return None
 
-    def _extract_location(self, text: str) -> tuple[Optional[str], Optional[int]]:
+    def _extract_location(self, text: str) -> tuple[str | None, int | None]:
         """Extract file path and line number."""
         # Python format: File "path.py", line 123
         match = re.search(r'File "(.+?)", line (\d+)', text)
@@ -229,7 +224,7 @@ class ErrorParser:
 
         return None, None
 
-    def _extract_key_terms(self, text: str, error_type: Optional[str]) -> list[str]:
+    def _extract_key_terms(self, text: str, error_type: str | None) -> list[str]:
         """Extract key terms for searching."""
         terms = set()  # Use set to avoid duplicates
 

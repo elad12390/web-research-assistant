@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import List
 
 import httpx
 
@@ -26,7 +25,7 @@ class RepoInfo:
     open_issues: int
     open_prs: int | None
     homepage: str | None
-    topics: List[str]
+    topics: list[str]
     archived: bool
     size_kb: int
 
@@ -64,9 +63,7 @@ class GitHubClient:
 
         url = f"https://api.github.com/repos/{owner}/{repo}"
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout, headers=self._headers
-        ) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
             response = await client.get(url)
             response.raise_for_status()
             data = response.json()
@@ -85,9 +82,7 @@ class GitHubClient:
             stars=data.get("stargazers_count", 0),
             forks=data.get("forks_count", 0),
             watchers=data.get("watchers_count", 0),
-            license=data.get("license", {}).get("name")
-            if data.get("license")
-            else None,
+            license=data.get("license", {}).get("name") if data.get("license") else None,
             language=data.get("language"),
             last_updated=last_updated,
             open_issues=data.get("open_issues_count", 0),
@@ -98,17 +93,13 @@ class GitHubClient:
             size_kb=data.get("size", 0),
         )
 
-    async def get_recent_commits(
-        self, owner: str, repo: str, count: int = 5
-    ) -> List[Commit]:
+    async def get_recent_commits(self, owner: str, repo: str, count: int = 5) -> list[Commit]:
         """Fetch recent commits from repository."""
 
         url = f"https://api.github.com/repos/{owner}/{repo}/commits"
         params = {"per_page": count}
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout, headers=self._headers
-        ) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()
             data = response.json()
@@ -148,7 +139,7 @@ class GitHubClient:
                 response = await client.get(url, params=params)
                 if response.status_code == 200:
                     # GitHub includes total count in Link header, but easier to count from search
-                    search_url = f"https://api.github.com/search/issues"
+                    search_url = "https://api.github.com/search/issues"
                     search_params = {
                         "q": f"repo:{owner}/{repo} type:pr state:open",
                         "per_page": 1,
@@ -194,9 +185,7 @@ class GitHubClient:
 
         # Handle full URLs
         if repo_input.startswith(("https://", "http://")):
-            match = re.match(
-                r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git|/.*)?$", repo_input
-            )
+            match = re.match(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git|/.*)?$", repo_input)
             if match:
                 return match.group(1), match.group(2)
 
@@ -206,13 +195,9 @@ class GitHubClient:
             if len(parts) >= 2:
                 return parts[0], parts[1]
 
-        raise ValueError(
-            f"Invalid repo format: {repo_input}. Use 'owner/repo' or full GitHub URL."
-        )
+        raise ValueError(f"Invalid repo format: {repo_input}. Use 'owner/repo' or full GitHub URL.")
 
-    async def get_releases(
-        self, owner: str, repo: str, max_releases: int = 10
-    ) -> list[dict]:
+    async def get_releases(self, owner: str, repo: str, max_releases: int = 10) -> list[dict]:
         """Fetch releases for a repository.
 
         Args:
@@ -226,9 +211,7 @@ class GitHubClient:
         url = f"https://api.github.com/repos/{owner}/{repo}/releases"
         params = {"per_page": min(max_releases, 100)}
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout, headers=self._headers
-        ) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()
             return response.json()
