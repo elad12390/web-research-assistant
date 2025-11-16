@@ -26,13 +26,56 @@ instance, the [`crawl4ai`](https://github.com/unclecode/crawl4ai) project, and P
 All tools feature comprehensive error handling, response size limits, usage tracking, and clear documentation
 for optimal AI agent integration.
 
+## Quick Start
+
+1. **Set up SearXNG** (5 minutes):
+   ```bash
+   # Using Docker (recommended)
+   docker run -d -p 2288:8080 searxng/searxng:latest
+   ```
+   Then configure search engines - see [SEARXNG_SETUP.md](SEARXNG_SETUP.md) for optimized settings.
+
+2. **Install the MCP server**:
+   ```bash
+   uvx web-research-assistant  # or: pip install web-research-assistant
+   ```
+
+3. **Configure Claude Desktop** - add to `claude_desktop_config.json`:
+   ```json
+   {
+     "mcpServers": {
+       "web-research-assistant": {
+         "command": "uvx",
+         "args": ["web-research-assistant"]
+       }
+     }
+   }
+   ```
+
+4. **Restart Claude Desktop** and start researching!
+
+> ⚠️ **For best results**: Configure SearXNG with GitHub, Stack Overflow, and other code-focused search engines. See [SEARXNG_SETUP.md](SEARXNG_SETUP.md) for the recommended configuration.
+
 ## Prerequisites
 
-- Python 3.10+
-- A running SearXNG instance listening on `http://localhost:2288`
-  - **See [SEARXNG_SETUP.md](SEARXNG_SETUP.md) for complete SearXNG setup guide with Docker**
-- Playwright browsers for crawl4ai (one-time setup)
-- (Optional) Pixabay API key for image search - get one free at [pixabay.com/api/docs](https://pixabay.com/api/docs/)
+### Required
+
+- **Python 3.10+**
+- **A running SearXNG instance** on `http://localhost:2288`
+  - **📖 See [SEARXNG_SETUP.md](SEARXNG_SETUP.md) for complete Docker setup guide**
+  - ⚠️ **IMPORTANT**: For best results, enable these search engines in SearXNG:
+    - **GitHub, Stack Overflow, GitLab** (for code search - critical!)
+    - **DuckDuckGo, Brave** (for web search)
+    - **MDN, Wikipedia** (for documentation)
+    - **Reddit, HackerNews** (for tutorials and discussions)
+    - See [SEARXNG_SETUP.md](SEARXNG_SETUP.md) for the full optimized configuration
+
+### Optional
+
+- **Pixabay API key** for image search - [Get free key](https://pixabay.com/api/docs/)
+- **Playwright browsers** for advanced crawling (auto-installed with `crawl4ai-setup`)
+
+### Developer Setup (if running from source)
 
 ```bash
 uv tool install uv  # if you do not already have uv
