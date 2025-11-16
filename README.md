@@ -42,18 +42,63 @@ uv run crawl4ai-setup  # installs Chromium for crawl4ai
 
 > You can also use `pip install -r requirements.txt` if you prefer pip over uv.
 
-## Running the server
+## Installation
+
+### Option 1: Using uvx (Recommended - No installation needed!)
 
 ```bash
-uv run web-research-assistant
+uvx web-research-assistant
+```
+
+This runs the server directly from PyPI without installing it globally.
+
+### Option 2: Install with pip
+
+```bash
+pip install web-research-assistant
+web-research-assistant
+```
+
+### Option 3: Install with uv
+
+```bash
+uv tool install web-research-assistant
+web-research-assistant
 ```
 
 By default the server communicates over stdio, which makes it easy to wire into
 Claude Desktop or any other MCP host.
 
-### Claude Desktop example
+### Claude Desktop Configuration
 
 Add the server to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+#### Option 1: Using uvx (Recommended - No local installation needed!)
+
+```json
+{
+  "mcpServers": {
+    "web-research-assistant": {
+      "command": "uvx",
+      "args": ["web-research-assistant"]
+    }
+  }
+}
+```
+
+#### Option 2: Using installed package
+
+```json
+{
+  "mcpServers": {
+    "web-research-assistant": {
+      "command": "web-research-assistant"
+    }
+  }
+}
+```
+
+#### Option 3: Running from source (development)
 
 ```json
 {
