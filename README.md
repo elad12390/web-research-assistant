@@ -1,5 +1,10 @@
 # Web Research Assistant MCP Server
 
+[![PyPI](https://img.shields.io/pypi/v/searxng-mcp?color=blue)](https://pypi.org/project/searxng-mcp/)
+[![Python Version](https://img.shields.io/pypi/pyversions/searxng-mcp)](https://pypi.org/project/searxng-mcp/)
+[![License](https://img.shields.io/github/license/elad12390/web-research-assistant)](https://github.com/elad12390/web-research-assistant/blob/main/LICENSE)
+[![CI](https://github.com/elad12390/web-research-assistant/workflows/CI/badge.svg)](https://github.com/elad12390/web-research-assistant/actions)
+
 Comprehensive Model Context Protocol (MCP) server that provides web research and discovery capabilities.
 Includes 13 tools for searching, crawling, and analyzing web content, powered by your local Docker SearXNG 
 instance, the [`crawl4ai`](https://github.com/unclecode/crawl4ai) project, and Pixabay API:

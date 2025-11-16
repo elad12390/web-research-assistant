@@ -1,0 +1,20 @@
+# Ensure consistent line endings
+* text=auto eol=lf
+
+# Python files
+*.py text
+
+# Documentation
+*.md text
+*.rst text
+*.txt text
+
+# Config files
+*.yml text
+*.yaml text
+*.toml text
+*.ini text
+*.json text
+
+# Exclude docs from language stats
+docs/** linguist-documentation

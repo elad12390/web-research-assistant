@@ -1,14 +1,63 @@
 [project]
 name = "searxng-mcp"
 version = "0.1.0"
-description = "MCP server exposing local SearXNG search and crawl4ai fetching."
+description = "Comprehensive MCP server for web research with 13 tools: search, crawl, package info, GitHub stats, error translation, API docs discovery, and more."
 readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Elad Ben Haim", email = "elad12390@gmail.com"}
+]
+maintainers = [
+    {name = "Elad Ben Haim", email = "elad12390@gmail.com"}
+]
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "searxng",
+    "web-research",
+    "ai-tools",
+    "claude",
+    "search",
+    "crawling",
+    "package-registry",
+    "github-api",
+    "error-translator",
+    "api-documentation"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "mcp[cli]>=1.2.0",
     "httpx>=0.27,<0.29",
     "crawl4ai>=0.4.0",
     "beautifulsoup4>=4.12.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/elad12390/web-research-assistant"
+Repository = "https://github.com/elad12390/web-research-assistant"
+Issues = "https://github.com/elad12390/web-research-assistant/issues"
+Changelog = "https://github.com/elad12390/web-research-assistant/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
 ]
 
 [project.scripts]
@@ -19,3 +68,34 @@ package = true
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
