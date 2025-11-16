@@ -112,11 +112,13 @@ web-research-assistant
 By default the server communicates over stdio, which makes it easy to wire into
 Claude Desktop or any other MCP host.
 
-### Claude Desktop Configuration
+### MCP Client Configuration
 
-Add the server to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+#### Claude Desktop
 
-#### Option 1: Using uvx (Recommended - No local installation needed!)
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+**Option 1: Using uvx (Recommended - No installation needed!)**
 
 ```json
 {
@@ -129,7 +131,7 @@ Add the server to `~/Library/Application Support/Claude/claude_desktop_config.js
 }
 ```
 
-#### Option 2: Using installed package
+**Option 2: Using installed package**
 
 ```json
 {
@@ -141,8 +143,41 @@ Add the server to `~/Library/Application Support/Claude/claude_desktop_config.js
 }
 ```
 
-#### Option 3: Running from source (development)
+#### OpenCode
 
+Add to `~/.config/opencode/opencode.json`:
+
+**Using uvx (Recommended)**
+
+```json
+{
+  "mcp": {
+    "web-research-assistant": {
+      "type": "local",
+      "command": ["uvx", "web-research-assistant"],
+      "enabled": true
+    }
+  }
+}
+```
+
+**Using installed package**
+
+```json
+{
+  "mcp": {
+    "web-research-assistant": {
+      "type": "local",
+      "command": ["web-research-assistant"],
+      "enabled": true
+    }
+  }
+}
+```
+
+#### Development (Running from source)
+
+For Claude Desktop:
 ```json
 {
   "mcpServers": {
@@ -159,7 +194,26 @@ Add the server to `~/Library/Application Support/Claude/claude_desktop_config.js
 }
 ```
 
-Restart Claude Desktop afterwards. The MCP slider will show all available tools.
+For OpenCode:
+```json
+{
+  "mcp": {
+    "web-research-assistant": {
+      "type": "local",
+      "command": [
+        "uv",
+        "--directory",
+        "/ABSOLUTE/PATH/TO/web-research-assistant",
+        "run",
+        "web-research-assistant"
+      ],
+      "enabled": true
+    }
+  }
+}
+```
+
+**Restart your MCP client** afterwards. The MCP tools will be available immediately.
 
 ## Tool behavior
 
