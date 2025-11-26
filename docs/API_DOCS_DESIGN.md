@@ -57,7 +57,7 @@ Stripe API Documentation: Create a Customer
    
 🔐 Authentication:
    Use your secret API key. Include it in the Authorization header:
-   Authorization: Bearer sk_test_4eC39HqLyjWDarjtT1zdp7dc
+   Authorization: Bearer sk_test_YOUR_TEST_KEY_HERE
 
 📍 Endpoint: POST /v1/customers
 
@@ -132,13 +132,13 @@ Stripe API Documentation: Create a Customer
    ```
 
 💡 Working Example (curl):
-   ```bash
-   curl https://api.stripe.com/v1/customers \
-     -u sk_test_4eC39HqLyjWDarjtT1zdp7dc: \
-     -d email="jenny.rosen@example.com" \
-     -d name="Jenny Rosen" \
-     -d "metadata[order_id]"=6735
-   ```
+    ```bash
+    curl https://api.stripe.com/v1/customers \
+      -u sk_test_YOUR_TEST_KEY_HERE: \
+      -d email="jenny.rosen@example.com" \
+      -d name="Jenny Rosen" \
+      -d "metadata[order_id]"=6735
+    ```
 
 ⚠️ Important Notes:
    - Customer IDs are prefixed with "cus_"
