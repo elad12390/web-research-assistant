@@ -423,20 +423,47 @@ async def search_images(
     try:
         # Check if API key is configured
         if not pixabay_client.has_api_key():
-            result = (
-                "⚠️ Pixabay API key not configured\n\n"
-                "To use image search, you need to configure your Pixabay API key.\n\n"
-                "Steps:\n"
-                "1. Get a free API key from: https://pixabay.com/api/docs/\n"
-                "2. Set the environment variable: PIXABAY_API_KEY=your_key_here\n"
-                "3. Restart the MCP server\n\n"
-                "You can set it in your shell:\n"
-                "  export PIXABAY_API_KEY='your_key_here'\n\n"
-                "Or add it to your MCP server configuration in OpenCode/Claude Desktop config."
+            # Fallback: Use web search for images instead
+            fallback_results = await searcher.search(
+                f"{query} stock photo free",
+                category="images",
+                max_results=max_results,
             )
-            # Track as failure
-            error_msg = "API key not configured"
-            success = False
+
+            if fallback_results:
+                lines = [
+                    f"Image Search Results for: {query}",
+                    "(Using web search - configure PIXABAY_API_KEY for better stock photo results)",
+                    "─" * 70,
+                    "",
+                ]
+                for idx, hit in enumerate(fallback_results, 1):
+                    lines.append(f"{idx}. {hit.title}")
+                    lines.append(f"   {hit.url}")
+                    if hit.snippet:
+                        lines.append(f"   {hit.snippet[:100]}")
+                    lines.append("")
+
+                lines.extend(
+                    [
+                        "─" * 70,
+                        "For better stock photo results with resolution info:",
+                        "1. Get a free API key from: https://pixabay.com/api/docs/",
+                        "2. Set: PIXABAY_API_KEY=your_key_here",
+                    ]
+                )
+                result = clamp_text("\n".join(lines), MAX_RESPONSE_CHARS)
+                success = True  # Mark as success since we provided useful results
+            else:
+                result = (
+                    "⚠️ Pixabay API key not configured and web search returned no results.\n\n"
+                    "To enable full image search:\n"
+                    "1. Get a free API key from: https://pixabay.com/api/docs/\n"
+                    "2. Set the environment variable: PIXABAY_API_KEY=your_key_here\n"
+                    "3. Restart the MCP server"
+                )
+                error_msg = "API key not configured"
+                success = False
         else:
             max_results = max(1, min(max_results, 20))
 
@@ -680,14 +707,47 @@ async def github_repo(
     except httpx.HTTPStatusError as exc:
         error_msg = f"HTTP {exc.response.status_code}"
         if exc.response.status_code == 404:
-            result = f"Repository '{repo}' not found.\n\nCheck the repository name and ensure it's public."
+            # Try to provide helpful suggestions
+            suggestions = []
+            if "/" in repo:
+                parts = repo.replace("https://github.com/", "").split("/")
+                if len(parts) >= 2:
+                    owner_guess = parts[0]
+                    suggestions.append(
+                        f"- Check if '{owner_guess}' is the correct organization/user"
+                    )
+                    suggestions.append(f"- The repository may have been renamed or deleted")
+                    suggestions.append(f"- Try searching: https://github.com/search?q={parts[1]}")
+
+            result = (
+                f"Repository '{repo}' not found (HTTP 404).\n\n"
+                f"Possible reasons:\n"
+                f"- The repository doesn't exist or was deleted\n"
+                f"- The repository is private\n"
+                f"- There's a typo in the owner or repository name\n"
+            )
+            if suggestions:
+                result += f"\nSuggestions:\n" + "\n".join(suggestions)
         elif exc.response.status_code == 403:
-            result = f"Access denied to repository '{repo}'.\n\nThe repository might be private or you've hit rate limits."
+            result = (
+                f"Access denied to repository '{repo}' (HTTP 403).\n\n"
+                f"Possible reasons:\n"
+                f"- The repository is private\n"
+                f"- GitHub API rate limit exceeded\n"
+                f"- Set GITHUB_TOKEN environment variable for higher rate limits"
+            )
+        elif exc.response.status_code == 301:
+            # This shouldn't happen anymore with our redirect handling, but just in case
+            result = (
+                f"Repository '{repo}' has moved (HTTP 301).\n\n"
+                f"The repository may have been renamed or transferred.\n"
+                f"Try searching for the new location on GitHub."
+            )
         else:
             result = f"Failed to fetch repository '{repo}': HTTP {exc.response.status_code}"
     except ValueError as exc:
         error_msg = str(exc)
-        result = str(exc)  # Invalid repo format
+        result = str(exc)  # Invalid repo format - already has good error message
     except Exception as exc:  # noqa: BLE001
         error_msg = str(exc)
         result = f"Failed to fetch repository '{repo}': {exc}"
@@ -927,29 +987,36 @@ async def api_docs(
     try:
         max_results = max(1, min(max_results, 3))  # Clamp to 1-3
 
+        # Get alternative search terms for the API
+        search_terms = api_docs_detector.get_search_terms(api_name)
+
         # Find documentation URL
         docs_url = await api_docs_detector.find_docs_url(api_name)
 
         if not docs_url:
-            # Fallback: Search for official docs
-            search_results = await searcher.search(
-                f"{api_name} API official documentation",
-                category="general",
-                max_results=5,
-            )
+            # Fallback: Search for official docs using multiple search terms
+            for search_term in search_terms:
+                search_results = await searcher.search(
+                    f"{search_term} official documentation",
+                    category="general",
+                    max_results=5,
+                )
 
-            # Filter for docs-like URLs
-            for hit in search_results:
-                if any(
-                    indicator in hit.url.lower()
-                    for indicator in ["docs", "developer", "api", "reference"]
-                ):
-                    docs_url = hit.url
-                    # Extract base URL (remove path beyond /docs or /api)
-                    if "/docs" in docs_url:
-                        docs_url = docs_url.split("/docs")[0] + "/docs"
-                    elif "/api" in docs_url:
-                        docs_url = docs_url.split("/api")[0] + "/api"
+                # Filter for docs-like URLs
+                for hit in search_results:
+                    if any(
+                        indicator in hit.url.lower()
+                        for indicator in ["docs", "developer", "api", "reference"]
+                    ):
+                        docs_url = hit.url
+                        # Extract base URL (remove path beyond /docs or /api)
+                        if "/docs" in docs_url:
+                            docs_url = docs_url.split("/docs")[0] + "/docs"
+                        elif "/api" in docs_url:
+                            docs_url = docs_url.split("/api")[0] + "/api"
+                        break
+
+                if docs_url:
                     break
 
         if not docs_url:
@@ -969,10 +1036,79 @@ async def api_docs(
             # Search within the docs site
             search_query = f"site:{docs_domain} {topic}"
             doc_results = await searcher.search(
-                search_query, category="general", max_results=max_results
+                search_query, category="general", max_results=max_results * 2
             )
 
+            # Fallback 1: If site-specific search fails, try broader search with API name + topic
             if not doc_results:
+                # Try searching with the API name + topic directly
+                for search_term in search_terms[:2]:  # Try first 2 terms
+                    doc_results = await searcher.search(
+                        f"{search_term} {topic}",
+                        category="it",
+                        max_results=max_results * 2,
+                    )
+                    if doc_results:
+                        break
+
+            # Fallback 2: Try without site restriction but filter results
+            if not doc_results:
+                doc_results = await searcher.search(
+                    f"{api_name} API {topic} documentation",
+                    category="general",
+                    max_results=max_results * 2,
+                )
+
+            # Fallback 3: Simplify the topic (extract key terms) and try again
+            if not doc_results and len(topic.split()) > 3:
+                # Extract key terms from complex topics
+                # e.g., "v3 audio tags SSML break tags emotional delivery" -> "audio SSML"
+                import re as re_module
+
+                # Remove version numbers, common filler words
+                simplified = re_module.sub(r"\bv\d+\b", "", topic, flags=re_module.IGNORECASE)
+                simplified = re_module.sub(
+                    r"\b(api|the|a|an|and|or|for|to|with|using)\b",
+                    "",
+                    simplified,
+                    flags=re_module.IGNORECASE,
+                )
+                key_terms = [w for w in simplified.split() if len(w) > 2][:3]
+                if key_terms:
+                    simplified_topic = " ".join(key_terms)
+                    doc_results = await searcher.search(
+                        f"{api_name} {simplified_topic}",
+                        category="it",
+                        max_results=max_results * 2,
+                    )
+
+            # Fallback 4: If all searches fail, try crawling the base docs URL directly
+            if not doc_results and docs_url:
+                try:
+                    # Crawl the base docs URL - it often has navigation/overview
+                    base_content = await crawler_client.fetch(docs_url, max_chars=15000)
+                    if base_content and len(base_content) > 200:
+                        # Create a minimal result from the base docs
+                        doc = APIDocumentation(
+                            api_name=api_name,
+                            topic=topic,
+                            docs_url=docs_url,
+                            overview=api_docs_extractor.extract_overview(base_content),
+                            parameters=[],
+                            examples=api_docs_extractor.extract_examples(base_content),
+                            related_links=api_docs_extractor.extract_links(base_content, docs_url),
+                            notes=[
+                                f"Note: Could not find specific docs for '{topic}'. Showing general documentation."
+                            ],
+                            source_urls=[docs_url],
+                        )
+                        result = api_docs_extractor.format_documentation(doc)
+                        result = clamp_text(result, MAX_RESPONSE_CHARS)
+                        success = True
+                except Exception:  # noqa: BLE001
+                    pass  # Fall through to error
+
+            if not doc_results and not success:
                 result = (
                     f"Found documentation site: {docs_url}\n"
                     f"But no results for topic: '{topic}'\n\n"
@@ -983,7 +1119,7 @@ async def api_docs(
                 )
                 error_msg = "No results for topic"
                 success = False
-            else:
+            elif doc_results:
                 # Crawl the top results
                 source_urls = []
                 all_content = []

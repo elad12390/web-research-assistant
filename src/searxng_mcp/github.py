@@ -58,12 +58,46 @@ class GitHubClient:
 
         self._headers = headers
 
+    async def _resolve_repo_redirect(self, owner: str, repo: str) -> tuple[str, str]:
+        """
+        Resolve repository redirects (renamed/transferred repos).
+
+        GitHub API returns 301 for renamed repos with the new location in the response.
+        """
+        url = f"https://api.github.com/repos/{owner}/{repo}"
+
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            headers=self._headers,
+            follow_redirects=True,  # Follow redirects
+        ) as client:
+            response = await client.get(url)
+
+            # If we followed a redirect, extract new owner/repo from the response
+            if response.status_code == 200:
+                data = response.json()
+                new_full_name = data.get("full_name", f"{owner}/{repo}")
+                if "/" in new_full_name:
+                    new_owner, new_repo = new_full_name.split("/", 1)
+                    return new_owner, new_repo
+
+            response.raise_for_status()
+
+        return owner, repo
+
     async def get_repo_info(self, owner: str, repo: str) -> RepoInfo:
         """Fetch repository information from GitHub API."""
 
-        url = f"https://api.github.com/repos/{owner}/{repo}"
+        # First resolve any redirects (renamed repos)
+        resolved_owner, resolved_repo = await self._resolve_repo_redirect(owner, repo)
 
-        async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
+        url = f"https://api.github.com/repos/{resolved_owner}/{resolved_repo}"
+
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            headers=self._headers,
+            follow_redirects=True,
+        ) as client:
             response = await client.get(url)
             response.raise_for_status()
             data = response.json()
@@ -181,21 +215,98 @@ class GitHubClient:
 
     @staticmethod
     def parse_repo_url(repo_input: str) -> tuple[str, str]:
-        """Parse various GitHub repo input formats to (owner, repo)."""
+        """Parse various GitHub repo input formats to (owner, repo).
+
+        Supported formats:
+        - owner/repo
+        - https://github.com/owner/repo
+        - https://github.com/owner/repo.git
+        - https://github.com/owner/repo/tree/main
+        - https://github.com/owner/repo/blob/main/file.py
+
+        Invalid inputs that will raise ValueError:
+        - Non-GitHub URLs (e.g., https://example.com)
+        - GitHub search URLs (e.g., https://github.com/search?q=...)
+        - GitHub user/org pages without repo (e.g., https://github.com/microsoft)
+        """
+        repo_input = repo_input.strip()
 
         # Handle full URLs
         if repo_input.startswith(("https://", "http://")):
-            match = re.match(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git|/.*)?$", repo_input)
+            # Must be a github.com URL
+            if "github.com" not in repo_input.lower():
+                raise ValueError(
+                    f"Not a GitHub URL: {repo_input}. "
+                    f"Please provide a GitHub repository URL or use 'owner/repo' format."
+                )
+
+            # Reject GitHub search/explore/etc URLs
+            invalid_patterns = [
+                r"github\.com/search",
+                r"github\.com/explore",
+                r"github\.com/topics",
+                r"github\.com/trending",
+                r"github\.com/settings",
+                r"github\.com/notifications",
+                r"github\.com/new",
+                r"github\.com/organizations",
+                r"github\.com/marketplace",
+            ]
+            for pattern in invalid_patterns:
+                if re.search(pattern, repo_input, re.IGNORECASE):
+                    raise ValueError(
+                        f"Invalid GitHub URL: {repo_input}. "
+                        f"This appears to be a GitHub search/explore page, not a repository. "
+                        f"Please provide a repository URL like 'https://github.com/owner/repo'."
+                    )
+
+            # Parse repository URL - must have owner/repo
+            match = re.match(
+                r"https?://(?:www\.)?github\.com/([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+?)(?:\.git|/.*)?$",
+                repo_input,
+            )
             if match:
-                return match.group(1), match.group(2)
+                owner, repo = match.group(1), match.group(2)
+                # Validate owner and repo names
+                if owner and repo and len(owner) > 0 and len(repo) > 0:
+                    return owner, repo
+
+            # Check if it's just a user/org page (no repo)
+            user_match = re.match(
+                r"https?://(?:www\.)?github\.com/([a-zA-Z0-9_.-]+)/?$",
+                repo_input,
+            )
+            if user_match:
+                raise ValueError(
+                    f"Invalid GitHub URL: {repo_input}. "
+                    f"This appears to be a user/organization page, not a repository. "
+                    f"Please provide a repository URL like 'https://github.com/{user_match.group(1)}/repo-name'."
+                )
+
+            raise ValueError(
+                f"Could not parse GitHub URL: {repo_input}. "
+                f"Please use format 'https://github.com/owner/repo'."
+            )
 
         # Handle owner/repo format
         if "/" in repo_input:
             parts = repo_input.split("/")
             if len(parts) >= 2:
-                return parts[0], parts[1]
+                owner, repo = parts[0].strip(), parts[1].strip()
+                # Validate: must be non-empty and contain only valid characters
+                valid_pattern = r"^[a-zA-Z0-9_.-]+$"
+                if (
+                    owner
+                    and repo
+                    and re.match(valid_pattern, owner)
+                    and re.match(valid_pattern, repo)
+                ):
+                    return owner, repo
 
-        raise ValueError(f"Invalid repo format: {repo_input}. Use 'owner/repo' or full GitHub URL.")
+        raise ValueError(
+            f"Invalid repository format: {repo_input}. "
+            f"Use 'owner/repo' format (e.g., 'microsoft/vscode') or a full GitHub URL."
+        )
 
     async def get_releases(self, owner: str, repo: str, max_releases: int = 10) -> list[dict]:
         """Fetch releases for a repository.

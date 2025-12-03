@@ -52,7 +52,126 @@ class APIDocsDetector:
         "https://{api}.org/docs",
         "https://www.{api}.org/docs",
         "https://docs.{api}.org",
+        # .ai patterns
+        "https://docs.{api}.ai",
+        "https://{api}.ai/docs",
     ]
+
+    # API name aliases - map common variations to canonical names/URLs
+    # This handles cases like "Meta Graph API" -> "facebook"
+    API_ALIASES: dict[str, str | dict] = {
+        # Meta/Facebook
+        "meta": "facebook",
+        "meta graph": "facebook",
+        "meta graph api": "facebook",
+        "facebook graph": "facebook",
+        "facebook graph api": "facebook",
+        "instagram api": "facebook",
+        "instagram graph": "facebook",
+        # Google
+        "google site verification": {
+            "name": "google",
+            "docs_url": "https://developers.google.com/site-verification",
+        },
+        "google site verification api": {
+            "name": "google",
+            "docs_url": "https://developers.google.com/site-verification",
+        },
+        "google analytics": {
+            "name": "google",
+            "docs_url": "https://developers.google.com/analytics",
+        },
+        "google analytics 4": {
+            "name": "google",
+            "docs_url": "https://developers.google.com/analytics/devguides/config/admin/v1",
+        },
+        "ga4": {
+            "name": "google",
+            "docs_url": "https://developers.google.com/analytics/devguides/config/admin/v1",
+        },
+        "gemini": {"name": "google", "docs_url": "https://ai.google.dev/docs"},
+        "google gemini": {"name": "google", "docs_url": "https://ai.google.dev/docs"},
+        "vertex ai": {"name": "google", "docs_url": "https://cloud.google.com/vertex-ai/docs"},
+        "google cloud": {"name": "google", "docs_url": "https://cloud.google.com/docs"},
+        # TikTok
+        "tiktok": {"name": "tiktok", "docs_url": "https://developers.tiktok.com/doc"},
+        "tiktok business": {
+            "name": "tiktok",
+            "docs_url": "https://business-api.tiktok.com/portal/docs",
+        },
+        "tiktok business api": {
+            "name": "tiktok",
+            "docs_url": "https://business-api.tiktok.com/portal/docs",
+        },
+        "tiktok ads": {"name": "tiktok", "docs_url": "https://business-api.tiktok.com/portal/docs"},
+        # OpenAI
+        "openai": {"name": "openai", "docs_url": "https://platform.openai.com/docs"},
+        "chatgpt": {"name": "openai", "docs_url": "https://platform.openai.com/docs"},
+        "gpt": {"name": "openai", "docs_url": "https://platform.openai.com/docs"},
+        "dall-e": {"name": "openai", "docs_url": "https://platform.openai.com/docs/guides/images"},
+        "dalle": {"name": "openai", "docs_url": "https://platform.openai.com/docs/guides/images"},
+        # Anthropic
+        "anthropic": {"name": "anthropic", "docs_url": "https://docs.anthropic.com"},
+        "claude": {"name": "anthropic", "docs_url": "https://docs.anthropic.com"},
+        "claude api": {"name": "anthropic", "docs_url": "https://docs.anthropic.com"},
+        # Notion
+        "notion": {"name": "notion", "docs_url": "https://developers.notion.com"},
+        "notion api": {"name": "notion", "docs_url": "https://developers.notion.com/reference"},
+        # Slack
+        "slack": {"name": "slack", "docs_url": "https://api.slack.com/docs"},
+        "slack api": {"name": "slack", "docs_url": "https://api.slack.com/docs"},
+        "slack block kit": {"name": "slack", "docs_url": "https://api.slack.com/block-kit"},
+        # ElevenLabs
+        "elevenlabs": {"name": "elevenlabs", "docs_url": "https://elevenlabs.io/docs"},
+        "eleven labs": {"name": "elevenlabs", "docs_url": "https://elevenlabs.io/docs"},
+        "11labs": {"name": "elevenlabs", "docs_url": "https://elevenlabs.io/docs"},
+        # Fal.ai
+        "fal": {"name": "fal", "docs_url": "https://fal.ai/docs"},
+        "fal.ai": {"name": "fal", "docs_url": "https://fal.ai/docs"},
+        "fal ai": {"name": "fal", "docs_url": "https://fal.ai/docs"},
+        # Cloudflare
+        "cloudflare": {"name": "cloudflare", "docs_url": "https://developers.cloudflare.com"},
+        "cloudflare waf": {
+            "name": "cloudflare",
+            "docs_url": "https://developers.cloudflare.com/waf",
+        },
+        # AWS
+        "aws": {"name": "aws", "docs_url": "https://docs.aws.amazon.com"},
+        "amazon": {"name": "aws", "docs_url": "https://docs.aws.amazon.com"},
+        # Stripe
+        "stripe": {"name": "stripe", "docs_url": "https://docs.stripe.com/api"},
+        # Twilio
+        "twilio": {"name": "twilio", "docs_url": "https://www.twilio.com/docs/messaging"},
+        "twilio sms": {"name": "twilio", "docs_url": "https://www.twilio.com/docs/sms"},
+        # SendGrid
+        "sendgrid": {"name": "sendgrid", "docs_url": "https://www.twilio.com/docs/sendgrid"},
+        # Plaid
+        "plaid": {"name": "plaid", "docs_url": "https://plaid.com/docs"},
+        # Vercel
+        "vercel": {"name": "vercel", "docs_url": "https://vercel.com/docs"},
+        # Spartan (Angular UI)
+        "spartan": {"name": "spartan", "docs_url": "https://www.spartan.ng/documentation"},
+        "spartan ui": {"name": "spartan", "docs_url": "https://www.spartan.ng/documentation"},
+        # Mureka
+        "mureka": {"name": "mureka", "docs_url": "https://docs.mureka.ai"},
+        # Replicate
+        "replicate": {"name": "replicate", "docs_url": "https://replicate.com/docs"},
+        # Hugging Face
+        "huggingface": {"name": "huggingface", "docs_url": "https://huggingface.co/docs"},
+        "hugging face": {"name": "huggingface", "docs_url": "https://huggingface.co/docs"},
+        "hf": {"name": "huggingface", "docs_url": "https://huggingface.co/docs"},
+        # Supabase
+        "supabase": {"name": "supabase", "docs_url": "https://supabase.com/docs"},
+        # Firebase
+        "firebase": {"name": "firebase", "docs_url": "https://firebase.google.com/docs"},
+        # Vercel
+        "vercel": {"name": "vercel", "docs_url": "https://vercel.com/docs"},
+        # Netlify
+        "netlify": {"name": "netlify", "docs_url": "https://docs.netlify.com"},
+        # Discord
+        "discord": {"name": "discord", "docs_url": "https://discord.com/developers/docs"},
+        "discord api": {"name": "discord", "docs_url": "https://discord.com/developers/docs"},
+    }
 
     def __init__(self):
         self.http_client = httpx.AsyncClient(
@@ -61,24 +180,95 @@ class APIDocsDetector:
             headers={"User-Agent": "Mozilla/5.0 (compatible; API-Docs-Explorer/1.0)"},
         )
 
+    def normalize_api_name(self, api_name: str) -> tuple[str, str | None]:
+        """
+        Normalize API name using aliases.
+
+        Returns:
+            Tuple of (normalized_name, known_docs_url or None)
+        """
+        api_lower = api_name.lower().strip()
+
+        # Check for exact match in aliases
+        if api_lower in self.API_ALIASES:
+            alias = self.API_ALIASES[api_lower]
+            if isinstance(alias, str):
+                return alias, None
+            elif isinstance(alias, dict):
+                return alias.get("name", api_lower), alias.get("docs_url")
+
+        # Check for partial matches (e.g., "Meta Graph API" contains "meta graph")
+        for key, alias in self.API_ALIASES.items():
+            if key in api_lower or api_lower in key:
+                if isinstance(alias, str):
+                    return alias, None
+                elif isinstance(alias, dict):
+                    return alias.get("name", api_lower), alias.get("docs_url")
+
+        # Clean up common suffixes
+        cleaned = api_lower
+        for suffix in [" api", " sdk", " docs", " documentation"]:
+            if cleaned.endswith(suffix):
+                cleaned = cleaned[: -len(suffix)].strip()
+
+        # Remove special characters and spaces for URL generation
+        url_safe = re.sub(r"[^a-z0-9]", "", cleaned)
+
+        return url_safe, None
+
     async def find_docs_url(self, api_name: str) -> str | None:
         """
         Dynamically find the official documentation URL for an API.
 
         Strategy:
-        1. Try common URL patterns (docs.X.com, X.com/docs, etc.)
-        2. If patterns fail, return None to trigger search fallback
+        1. Check API aliases for known documentation URLs
+        2. Try common URL patterns (docs.X.com, X.com/docs, etc.)
+        3. If patterns fail, return None to trigger search fallback
         """
-        api_lower = api_name.lower().strip()
+        # Normalize the API name and check for known URLs
+        normalized_name, known_url = self.normalize_api_name(api_name)
 
-        # Try common patterns
+        # If we have a known URL from aliases, verify it's accessible
+        if known_url:
+            if await self._is_valid_docs_site(known_url):
+                return known_url
+
+        # Try common patterns with normalized name
         for pattern in self.DOC_PATTERNS:
-            url = pattern.format(api=api_lower)
+            url = pattern.format(api=normalized_name)
             if await self._is_valid_docs_site(url):
                 return url
 
         # If all patterns fail, return None and let caller search
         return None
+
+    def get_search_terms(self, api_name: str) -> list[str]:
+        """
+        Get alternative search terms for an API.
+
+        Returns multiple variations to try when searching.
+        """
+        api_lower = api_name.lower().strip()
+        terms = [api_name]  # Original
+
+        # Add normalized version
+        normalized, _ = self.normalize_api_name(api_name)
+        if normalized != api_lower:
+            terms.append(normalized)
+
+        # Add common variations
+        if "api" not in api_lower:
+            terms.append(f"{api_name} API")
+
+        # Check aliases for the canonical name
+        if api_lower in self.API_ALIASES:
+            alias = self.API_ALIASES[api_lower]
+            if isinstance(alias, str):
+                terms.append(alias)
+            elif isinstance(alias, dict) and "name" in alias:
+                terms.append(alias["name"])
+
+        return list(dict.fromkeys(terms))  # Deduplicate while preserving order
 
     async def _is_valid_docs_site(self, url: str) -> bool:
         """Check if a URL is a valid documentation site."""

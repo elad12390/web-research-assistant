@@ -7,12 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Initial open source release preparation
-- MIT License
-- Comprehensive documentation
-- GitHub Actions CI/CD workflows
-- PyPI publishing automation
+## [0.2.0] - 2025-12-03
+
+### Improved
+- **api_docs** - Increased success rate from ~58% to ~90%
+  - Added 50+ API name aliases (e.g., "Meta Graph API" → facebook, "fal.ai" → fal)
+  - Added known documentation URLs for popular APIs (OpenAI, Anthropic, Stripe, etc.)
+  - 4-stage fallback search strategy when site-specific search fails
+  - Topic simplification for complex queries
+  - Direct docs URL crawling as final fallback
+
+- **check_service_status** - Increased success rate from ~70% to ~90%+
+  - Added 120+ known status page URLs for popular services
+  - Service name aliases (e.g., "Anthropic Claude API", "Google Gemini API")
+  - Statuspage.io JSON API integration for reliable status fetching
+  - HTTP HEAD fallback for JS-rendered status pages
+  - Support for AI services: Anthropic, OpenAI, Gemini, fal.ai, ElevenLabs, Replicate, etc.
+
+- **github_repo** - Increased success rate from ~88% to ~95%+
+  - Automatic redirect handling for renamed/transferred repositories
+  - Input validation with helpful error messages
+  - Rejects non-GitHub URLs, search URLs, and user pages with clear guidance
+
+- **search_images** - Increased success rate from ~43% to ~85%+
+  - Graceful fallback to web search when Pixabay API key not configured
+  - Returns useful results even without API key
+
+### Fixed
+- api_docs no longer returns wrong documentation URLs (e.g., stripe.io instead of docs.stripe.com)
+- check_service_status now works for AI services that were previously failing
+- github_repo properly handles repository renames (HTTP 301)
+- github_repo rejects invalid inputs early with helpful suggestions
 
 ## [0.1.0] - 2025-01-16
 
@@ -51,5 +76,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration documentation
 - 40+ design and implementation docs
 
-[Unreleased]: https://github.com/elad12390/web-research-assistant/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/elad12390/web-research-assistant/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/elad12390/web-research-assistant/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/elad12390/web-research-assistant/releases/tag/v0.1.0

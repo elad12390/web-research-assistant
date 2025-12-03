@@ -1,6 +1,6 @@
 [project]
 name = "web-research-assistant"
-version = "0.1.0"
+version = "0.2.0"
 description = "Comprehensive MCP server for web research with 13 tools: search, crawl, package info, GitHub stats, error translation, API docs discovery, and more."
 readme = "README.md"
 requires-python = ">=3.10"
