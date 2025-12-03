@@ -6,7 +6,7 @@
 [![CI](https://github.com/elad12390/web-research-assistant/workflows/CI/badge.svg)](https://github.com/elad12390/web-research-assistant/actions)
 
 Comprehensive Model Context Protocol (MCP) server that provides web research and discovery capabilities.
-Includes 13 tools for searching, crawling, and analyzing web content, powered by your local Docker SearXNG 
+Includes **13 tools**, **4 resources**, and **5 prompts** for searching, crawling, and analyzing web content, powered by your local Docker SearXNG 
 instance, the [`crawl4ai`](https://github.com/unclecode/crawl4ai) project, and Pixabay API:
 
 1. `web_search` &mdash; federated search across multiple engines via SearXNG
@@ -25,6 +25,21 @@ instance, the [`crawl4ai`](https://github.com/unclecode/crawl4ai) project, and P
 
 All tools feature comprehensive error handling, response size limits, usage tracking, and clear documentation
 for optimal AI agent integration.
+
+### MCP Resources (Direct Data Lookups)
+
+- `package://{registry}/{name}` - Package info from npm, PyPI, crates.io, or Go modules
+- `github://{owner}/{repo}` - Repository information and health metrics
+- `status://{service}` - Service health status for 120+ services
+- `changelog://{registry}/{package}` - Package release notes and changelogs
+
+### MCP Prompts (Reusable Workflows)
+
+- `research_package` - Comprehensive package evaluation
+- `debug_error` - Structured error debugging with solutions
+- `compare_technologies` - Side-by-side technology comparison
+- `evaluate_repository` - GitHub repository health assessment
+- `check_service_health` - Multi-service status monitoring
 
 ## Quick Start
 
@@ -236,6 +251,29 @@ For OpenCode:
 Results are automatically trimmed (default 8 KB) so they stay well within MCP
 response expectations. If truncation happens, the text ends with a note reminding the
 model that more detail is available on request.
+
+## Resources
+
+MCP Resources provide direct data access via URI templates - perfect for quick lookups without tool calls.
+
+| Resource URI | Description | Example |
+| ------------ | ----------- | ------- |
+| `package://{registry}/{name}` | Package metadata (version, downloads, license, dependencies) | `package://npm/express` |
+| `github://{owner}/{repo}` | Repository info (stars, forks, issues, activity) | `github://facebook/react` |
+| `status://{service}` | Service health status | `status://stripe` |
+| `changelog://{registry}/{package}` | Release notes and changelogs | `changelog://npm/typescript` |
+
+## Prompts
+
+MCP Prompts are reusable message templates that guide AI assistants through common workflows.
+
+| Prompt | Arguments | Use Case |
+| ------ | --------- | -------- |
+| `research_package` | `package_name`, `registry` | Evaluate a package before adding it as a dependency |
+| `debug_error` | `error_message`, `language` (optional), `framework` (optional) | Debug an error with context and solutions |
+| `compare_technologies` | `tech1`, `tech2`, `tech3` (optional), `tech4` (optional), `tech5` (optional) | Compare frameworks, databases, or languages |
+| `evaluate_repository` | `owner`, `repo` | Assess a GitHub project's health and activity |
+| `check_service_health` | `services` (comma-separated) | Monitor multiple services at once |
 
 ## Configuration
 

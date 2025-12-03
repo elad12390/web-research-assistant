@@ -1499,6 +1499,262 @@ async def check_service_status(
     return result
 
 
+# =============================================================================
+# RESOURCES - Read-only data lookups
+# =============================================================================
+
+
+@mcp.resource("package://{registry}/{name}")
+async def get_package_resource(registry: str, name: str) -> str:
+    """
+    Get package information from a registry.
+
+    URI format: package://{registry}/{name}
+    Examples:
+    - package://npm/express
+    - package://pypi/fastapi
+    - package://crates/serde
+    - package://go/github.com/gin-gonic/gin
+    """
+    if registry not in ("npm", "pypi", "crates", "go"):
+        return f"Unknown registry: {registry}. Supported: npm, pypi, crates, go"
+
+    try:
+        if registry == "npm":
+            info = await registry_client.search_npm(name)
+        elif registry == "pypi":
+            info = await registry_client.search_pypi(name)
+        elif registry == "crates":
+            info = await registry_client.search_crates(name)
+        else:  # go
+            info = await registry_client.search_go(name)
+
+        return _format_package_info(info)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return f"Package '{name}' not found on {registry}."
+        return f"Failed to fetch {registry} package '{name}': HTTP {exc.response.status_code}"
+    except Exception as exc:  # noqa: BLE001
+        return f"Failed to fetch {registry} package '{name}': {exc}"
+
+
+@mcp.resource("github://{owner}/{repo}")
+async def get_github_resource(owner: str, repo: str) -> str:
+    """
+    Get GitHub repository information.
+
+    URI format: github://{owner}/{repo}
+    Examples:
+    - github://microsoft/vscode
+    - github://facebook/react
+    - github://anthropics/anthropic-sdk-python
+    """
+    try:
+        repo_info = await github_client.get_repo_info(owner, repo)
+        commits = None
+        try:
+            commits = await github_client.get_recent_commits(owner, repo, count=3)
+        except Exception:  # noqa: BLE001, S110
+            pass
+        return _format_repo_info(repo_info, commits)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return f"Repository '{owner}/{repo}' not found."
+        elif exc.response.status_code == 403:
+            return f"Access denied to '{owner}/{repo}'. May be private or rate limited."
+        return f"Failed to fetch '{owner}/{repo}': HTTP {exc.response.status_code}"
+    except Exception as exc:  # noqa: BLE001
+        return f"Failed to fetch '{owner}/{repo}': {exc}"
+
+
+@mcp.resource("status://{service}")
+async def get_service_status_resource(service: str) -> str:
+    """
+    Get service health status.
+
+    URI format: status://{service}
+    Examples:
+    - status://anthropic
+    - status://openai
+    - status://github
+    - status://stripe
+    """
+    import json
+
+    try:
+        status = await service_health_checker.check_service(service)
+        return json.dumps(status, indent=2, ensure_ascii=False)
+    except Exception as exc:  # noqa: BLE001
+        return f"Failed to check status for '{service}': {exc}"
+
+
+@mcp.resource("changelog://{registry}/{package}")
+async def get_changelog_resource(registry: str, package: str) -> str:
+    """
+    Get package changelog and release notes.
+
+    URI format: changelog://{registry}/{package}
+    Examples:
+    - changelog://npm/react
+    - changelog://pypi/fastapi
+    """
+    import json
+
+    if registry not in ("npm", "pypi"):
+        return f"Unknown registry: {registry}. Supported: npm, pypi"
+
+    try:
+        changelog = await changelog_fetcher.get_changelog(package, registry, max_releases=5)
+        return json.dumps(changelog, indent=2, ensure_ascii=False)
+    except Exception as exc:  # noqa: BLE001
+        return f"Failed to fetch changelog for '{package}': {exc}"
+
+
+# =============================================================================
+# PROMPTS - Reusable message templates for common research tasks
+# =============================================================================
+
+
+@mcp.prompt()
+def research_package(
+    package: str,
+    registry: str = "npm",
+) -> str:
+    """
+    Generate a prompt for comprehensive package research.
+
+    Use this when you want to thoroughly evaluate a package before adding it to your project.
+    """
+    return f"""Please research the "{package}" package from {registry} and provide:
+
+1. **Overview**: What does this package do? What problem does it solve?
+2. **Popularity & Trust**: Download stats, GitHub stars, maintenance activity
+3. **Security**: Any known vulnerabilities or security concerns?
+4. **Dependencies**: How many dependencies does it have? Any concerns?
+5. **Alternatives**: What are the main alternatives and how does this compare?
+6. **Recommendation**: Should I use this package? Why or why not?
+
+Use the package://{registry}/{package} resource to get the package information, then search for additional context about alternatives and community sentiment."""
+
+
+@mcp.prompt()
+def debug_error(
+    error_message: str,
+    language: str = "",
+    framework: str = "",
+) -> str:
+    """
+    Generate a prompt for debugging an error message.
+
+    Use this when you encounter an error and want help understanding and fixing it.
+    """
+    context_parts = []
+    if language:
+        context_parts.append(f"Language: {language}")
+    if framework:
+        context_parts.append(f"Framework: {framework}")
+    context = "\n".join(context_parts) if context_parts else "Not specified"
+
+    return f"""I encountered this error and need help debugging it:
+
+```
+{error_message}
+```
+
+**Context:**
+{context}
+
+Please help me:
+1. **Understand**: What does this error mean in plain terms?
+2. **Root Cause**: What typically causes this error?
+3. **Fix**: How can I resolve this issue? Provide code examples if applicable.
+4. **Prevention**: How can I prevent this error in the future?
+
+Use the translate_error tool to find relevant Stack Overflow discussions and solutions."""
+
+
+@mcp.prompt()
+def compare_technologies(
+    tech1: str,
+    tech2: str,
+    use_case: str = "general use",
+) -> str:
+    """
+    Generate a prompt for comparing two technologies.
+
+    Use this when deciding between two frameworks, libraries, or tools.
+    """
+    return f"""Please compare **{tech1}** vs **{tech2}** for {use_case}.
+
+Analyze the following aspects:
+
+1. **Performance**: Speed, resource usage, scalability
+2. **Developer Experience**: Learning curve, documentation, tooling
+3. **Ecosystem**: Community size, available plugins/extensions, job market
+4. **Maintenance**: Release frequency, backward compatibility, long-term viability
+5. **Use Cases**: When to choose one over the other
+
+Use the compare_tech tool to gather data, then provide a clear recommendation with reasoning.
+
+**My use case**: {use_case}
+
+Which one should I choose and why?"""
+
+
+@mcp.prompt()
+def evaluate_repository(
+    owner: str,
+    repo: str,
+) -> str:
+    """
+    Generate a prompt for evaluating a GitHub repository.
+
+    Use this when deciding whether to use or contribute to an open source project.
+    """
+    return f"""Please evaluate the GitHub repository **{owner}/{repo}** for potential use in my project.
+
+Analyze:
+
+1. **Health**: Is this project actively maintained? Check recent commits, issue response time, PR activity.
+2. **Quality**: Code quality indicators, test coverage, documentation quality.
+3. **Community**: Number of contributors, community engagement, responsiveness to issues.
+4. **Stability**: Version history, breaking changes, deprecation policy.
+5. **Security**: Any known vulnerabilities? Security policy in place?
+6. **License**: Is the license compatible with my use case?
+
+Use the github://{owner}/{repo} resource to get repository information.
+
+Provide a clear recommendation: Should I use this project? What are the risks?"""
+
+
+@mcp.prompt()
+def check_service_health(
+    services: str,
+) -> str:
+    """
+    Generate a prompt for checking multiple service statuses.
+
+    Use this when you suspect infrastructure issues or before a deployment.
+    Provide comma-separated service names.
+    """
+    service_list = [s.strip() for s in services.split(",")]
+    resource_calls = "\n".join([f"- status://{s}" for s in service_list])
+
+    return f"""Please check the health status of the following services:
+
+{resource_calls}
+
+For each service, report:
+1. **Status**: Operational, degraded, or experiencing issues?
+2. **Active Incidents**: Any ongoing problems?
+3. **Recent History**: Any recent outages or maintenance?
+
+If any services are having issues, suggest:
+- Workarounds or alternatives
+- Expected resolution time (if available)
+- Impact on my application"""
+
+
 def main() -> None:
     """Entrypoint used by the console script."""
 

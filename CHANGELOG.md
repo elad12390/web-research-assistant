@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-12-03
+
+### Added
+- **4 MCP Resources** - Direct data lookups via URI templates:
+  - `package://{registry}/{name}` - Package info from npm, PyPI, crates.io, or Go modules
+  - `github://{owner}/{repo}` - Repository information and health metrics
+  - `status://{service}` - Service health status for 120+ services
+  - `changelog://{registry}/{package}` - Package release notes and changelogs
+
+- **5 MCP Prompts** - Reusable message templates for common workflows:
+  - `research_package` - Comprehensive package evaluation (downloads, maintenance, security)
+  - `debug_error` - Structured error debugging with context and solutions
+  - `compare_technologies` - Side-by-side technology comparison
+  - `evaluate_repository` - GitHub repository health and activity assessment
+  - `check_service_health` - Multi-service status monitoring
+
+### Why Resources & Prompts?
+- **Resources** enable direct data access without tool calls - perfect for quick lookups
+- **Prompts** provide pre-built workflows that guide AI assistants through complex tasks
+- Both follow the MCP specification for better interoperability
+
 ## [0.2.0] - 2025-12-03
 
 ### Improved
@@ -76,6 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration documentation
 - 40+ design and implementation docs
 
-[Unreleased]: https://github.com/elad12390/web-research-assistant/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/elad12390/web-research-assistant/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/elad12390/web-research-assistant/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/elad12390/web-research-assistant/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/elad12390/web-research-assistant/releases/tag/v0.1.0

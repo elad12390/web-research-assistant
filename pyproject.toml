@@ -1,7 +1,7 @@
 [project]
 name = "web-research-assistant"
-version = "0.2.0"
-description = "Comprehensive MCP server for web research with 13 tools: search, crawl, package info, GitHub stats, error translation, API docs discovery, and more."
+version = "0.3.0"
+description = "Comprehensive MCP server for web research with 13 tools, 4 resources, and 5 prompts: search, crawl, package info, GitHub stats, error translation, API docs discovery, and more."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
