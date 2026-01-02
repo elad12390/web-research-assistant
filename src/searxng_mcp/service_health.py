@@ -164,6 +164,25 @@ class StatusPageDetector:
         "weaviate": "https://status.weaviate.io",
         "qdrant": "https://status.qdrant.io",
         "milvus": "https://status.milvus.io",
+        # Additional AI Services (from user's usage)
+        "mureka": "https://status.mureka.ai",
+        "suno": "https://status.suno.ai",
+        "udio": "https://status.udio.com",
+        "cursor": "https://status.cursor.com",
+        "creatomate": "https://status.creatomate.com",
+        "vidu": "https://status.vidu.com",
+        # Developer Tools
+        "langfuse": "https://status.langfuse.com",
+        "pipedream": "https://status.pipedream.com",
+        "vercelaisdk": "https://www.vercel-status.com",
+        "tavily": "https://status.tavily.com",
+        # Additional common services
+        "chatgpt": "https://status.openai.com",
+        "gpt4": "https://status.openai.com",
+        "copilot": "https://www.githubstatus.com",
+        "githubcopilot": "https://www.githubstatus.com",
+        "webflow": "https://status.webflow.com",
+        "framer": "https://status.framer.com",
     }
 
     # Service name aliases - map variations to canonical names
@@ -389,10 +408,23 @@ class ServiceHealthChecker:
     async def _fetch_statuspage_api(self, status_url: str) -> dict | None:
         """Try to fetch status from Statuspage.io API (many services use this)."""
         import httpx
+        from urllib.parse import urlparse
 
-        # Statuspage.io has a standard API endpoint
-        # e.g., https://status.example.com/api/v2/status.json
+        # Parse base URL more carefully
+        parsed = urlparse(status_url)
+        base = f"{parsed.scheme}://{parsed.netloc}"
+
+        # Statuspage.io and Instatus API endpoints
         api_patterns = [
+            f"{base}/api/v2/status.json",
+            f"{base}/api/v2/summary.json",
+            f"{base}/api/v2/components.json",
+            # Instatus patterns
+            f"{base}/summary.json",
+            # Direct status endpoints some services use
+            f"{base}/status.json",
+            f"{base}/api/status",
+            # Original URL patterns as fallback
             f"{status_url.rstrip('/')}/api/v2/status.json",
             f"{status_url.rstrip('/')}/api/v2/summary.json",
         ]
@@ -406,9 +438,78 @@ class ServiceHealthChecker:
                 try:
                     response = await client.get(api_url)
                     if response.status_code == 200:
-                        return response.json()
+                        data = response.json()
+                        # Validate it looks like status data
+                        if any(
+                            key in data for key in ["status", "components", "indicator", "page"]
+                        ):
+                            return data
                 except Exception:
                     continue
+
+        return None
+
+    async def _check_downdetector(self, service: str) -> dict | None:
+        """Check downdetector for service status as a fallback."""
+        # Normalize service name for downdetector URL
+        service_slug = service.lower().replace(" ", "-").replace(".", "-")
+
+        # Common service name mappings for downdetector
+        downdetector_mappings = {
+            "openai": "openai",
+            "chatgpt": "openai",
+            "claude": "anthropic",
+            "anthropic": "anthropic",
+            "github": "github",
+            "aws": "aws-amazon-web-services",
+            "gcp": "google-cloud",
+            "azure": "windows-azure",
+            "slack": "slack",
+            "discord": "discord",
+            "stripe": "stripe",
+            "twilio": "twilio",
+            "vercel": "vercel",
+            "netlify": "netlify",
+            "cloudflare": "cloudflare",
+            "mongodb": "mongodb",
+            "supabase": "supabase",
+            "firebase": "firebase",
+            "notion": "notion",
+            "figma": "figma",
+            "zoom": "zoom",
+        }
+
+        slug = downdetector_mappings.get(service_slug, service_slug)
+        url = f"https://downdetector.com/status/{slug}/"
+
+        try:
+            content = await self.crawler.fetch(url, max_chars=50000)
+            content_lower = content.lower()
+
+            # Parse the page for status indicators
+            if "no problems" in content_lower or "no current problems" in content_lower:
+                return {
+                    "status": "operational",
+                    "source": "downdetector",
+                    "url": url,
+                    "message": "No problems detected by user reports",
+                }
+            elif "possible problems" in content_lower or "problems at" in content_lower:
+                return {
+                    "status": "possible_issues",
+                    "source": "downdetector",
+                    "url": url,
+                    "message": "User reports indicate possible problems",
+                }
+            elif "problems" in content_lower or "outage" in content_lower:
+                return {
+                    "status": "degraded_performance",
+                    "source": "downdetector",
+                    "url": url,
+                    "message": "User reports indicate service issues",
+                }
+        except Exception:
+            pass
 
         return None
 
@@ -464,6 +565,20 @@ class ServiceHealthChecker:
         status_url = self.detector.find_status_page(service)
 
         if not status_url:
+            # Try downdetector as a fallback when we don't know the status page
+            dd_result = await self._check_downdetector(service)
+            if dd_result:
+                return {
+                    "service": service,
+                    "status": dd_result["status"],
+                    "status_emoji": self.parser.get_status_emoji(dd_result["status"]),
+                    "source": "downdetector",
+                    "status_page_url": dd_result.get("url"),
+                    "checked_at": datetime.utcnow().isoformat() + "Z",
+                    "message": dd_result.get("message", ""),
+                    "note": "Status based on user reports from Downdetector",
+                }
+
             return {
                 "service": service,
                 "status": "unknown",
@@ -492,9 +607,24 @@ class ServiceHealthChecker:
                 return self._format_status_response(status)
 
         except Exception:
-            pass  # Fall through to HTTP check
+            pass  # Fall through to next strategy
 
-        # Strategy 3: Fallback - just check if URL is accessible
+        # Strategy 3: Try downdetector as fallback
+        dd_result = await self._check_downdetector(service)
+        if dd_result:
+            return {
+                "service": service,
+                "status": dd_result["status"],
+                "status_emoji": self.parser.get_status_emoji(dd_result["status"]),
+                "source": "downdetector",
+                "official_status_page": status_url,
+                "downdetector_url": dd_result.get("url"),
+                "checked_at": datetime.utcnow().isoformat() + "Z",
+                "message": dd_result.get("message", ""),
+                "note": "Official status page couldn't be parsed. Status based on Downdetector user reports.",
+            }
+
+        # Strategy 4: Fallback - just check if URL is accessible
         accessible, http_code = await self._check_url_accessible(status_url)
 
         if accessible:

@@ -60,15 +60,221 @@ class APIDocsDetector:
     # API name aliases - map common variations to canonical names/URLs
     # This handles cases like "Meta Graph API" -> "facebook"
     API_ALIASES: dict[str, str | dict] = {
+        # ===================
+        # AI/ML APIs
+        # ===================
+        # OpenAI
+        "openai": {"name": "openai", "docs_url": "https://platform.openai.com/docs"},
+        "chatgpt": {"name": "openai", "docs_url": "https://platform.openai.com/docs"},
+        "gpt": {"name": "openai", "docs_url": "https://platform.openai.com/docs"},
+        "gpt-4": {"name": "openai", "docs_url": "https://platform.openai.com/docs"},
+        "gpt4": {"name": "openai", "docs_url": "https://platform.openai.com/docs"},
+        "dall-e": {"name": "openai", "docs_url": "https://platform.openai.com/docs/guides/images"},
+        "dalle": {"name": "openai", "docs_url": "https://platform.openai.com/docs/guides/images"},
+        # Anthropic
+        "anthropic": {"name": "anthropic", "docs_url": "https://docs.anthropic.com"},
+        "anthropic claude": {"name": "anthropic", "docs_url": "https://docs.anthropic.com"},
+        "claude": {"name": "anthropic", "docs_url": "https://docs.anthropic.com"},
+        "claude api": {"name": "anthropic", "docs_url": "https://docs.anthropic.com"},
+        # Google AI
+        "gemini": {"name": "gemini", "docs_url": "https://ai.google.dev/gemini-api/docs"},
+        "google gemini": {"name": "gemini", "docs_url": "https://ai.google.dev/gemini-api/docs"},
+        "google-genai": {"name": "gemini", "docs_url": "https://ai.google.dev/gemini-api/docs"},
+        "vertex ai": {"name": "vertex", "docs_url": "https://cloud.google.com/vertex-ai/docs"},
+        "google vertex ai": {
+            "name": "vertex",
+            "docs_url": "https://cloud.google.com/vertex-ai/docs",
+        },
+        "gemini vertex ai": {
+            "name": "vertex",
+            "docs_url": "https://cloud.google.com/vertex-ai/docs",
+        },
+        "google vertex ai imagen": {
+            "name": "vertex",
+            "docs_url": "https://cloud.google.com/vertex-ai/generative-ai/docs/image/overview",
+        },
+        # ElevenLabs
+        "elevenlabs": {
+            "name": "elevenlabs",
+            "docs_url": "https://elevenlabs.io/docs/api-reference",
+        },
+        "eleven labs": {
+            "name": "elevenlabs",
+            "docs_url": "https://elevenlabs.io/docs/api-reference",
+        },
+        "11labs": {"name": "elevenlabs", "docs_url": "https://elevenlabs.io/docs/api-reference"},
+        # Fal.ai
+        "fal": {"name": "fal", "docs_url": "https://fal.ai/docs"},
+        "fal.ai": {"name": "fal", "docs_url": "https://fal.ai/docs"},
+        "fal ai": {"name": "fal", "docs_url": "https://fal.ai/docs"},
+        "fal.ai flux kontext": {
+            "name": "fal",
+            "docs_url": "https://fal.ai/models/fal-ai/flux-pro/kontext",
+        },
+        # BFL / Flux
+        "bfl": {"name": "bfl", "docs_url": "https://docs.bfl.ml"},
+        "bfl flux": {"name": "bfl", "docs_url": "https://docs.bfl.ml"},
+        "black forest labs": {"name": "bfl", "docs_url": "https://docs.bfl.ml"},
+        "bfl black forest labs flux": {"name": "bfl", "docs_url": "https://docs.bfl.ml"},
+        "flux": {"name": "bfl", "docs_url": "https://docs.bfl.ml"},
+        # Replicate
+        "replicate": {"name": "replicate", "docs_url": "https://replicate.com/docs"},
+        # Hugging Face
+        "huggingface": {"name": "huggingface", "docs_url": "https://huggingface.co/docs"},
+        "hugging face": {"name": "huggingface", "docs_url": "https://huggingface.co/docs"},
+        "hf": {"name": "huggingface", "docs_url": "https://huggingface.co/docs"},
+        # Stability AI
+        "stability": {"name": "stability", "docs_url": "https://platform.stability.ai/docs"},
+        "stability ai": {"name": "stability", "docs_url": "https://platform.stability.ai/docs"},
+        # Midjourney
+        "midjourney": {"name": "midjourney", "docs_url": "https://docs.midjourney.com"},
+        # Mureka (Music AI)
+        "mureka": {"name": "mureka", "docs_url": "https://docs.mureka.ai"},
+        # Suno (Music AI)
+        "suno": {"name": "suno", "docs_url": "https://suno.com/blog"},
+        "suno ai": {"name": "suno", "docs_url": "https://suno.com/blog"},
+        # Vidu (Video AI)
+        "vidu": {"name": "vidu", "docs_url": "https://www.vidu.com/docs"},
+        # Creatomate (Video API)
+        "creatomate": {"name": "creatomate", "docs_url": "https://creatomate.com/docs"},
+        # ===================
+        # Developer Tools & Frameworks
+        # ===================
+        # Langfuse (LLM Observability)
+        "langfuse": {"name": "langfuse", "docs_url": "https://langfuse.com/docs"},
+        # MCP (Model Context Protocol)
+        "mcp": {"name": "mcp", "docs_url": "https://modelcontextprotocol.io/docs"},
+        "mcp python sdk": {"name": "mcp", "docs_url": "https://modelcontextprotocol.io/docs"},
+        # Vercel AI SDK
+        "ai-sdk": {"name": "ai-sdk", "docs_url": "https://sdk.vercel.ai/docs"},
+        "vercel ai sdk": {"name": "ai-sdk", "docs_url": "https://sdk.vercel.ai/docs"},
+        # Mirascope (LLM Framework)
+        "mirascope": {"name": "mirascope", "docs_url": "https://mirascope.io/docs"},
+        # Pipedream
+        "pipedream": {"name": "pipedream", "docs_url": "https://pipedream.com/docs"},
+        "pipedream connect": {
+            "name": "pipedream",
+            "docs_url": "https://pipedream.com/docs/connect",
+        },
+        # Tavily (Search API)
+        "tavily": {"name": "tavily", "docs_url": "https://docs.tavily.com"},
+        # OpenCode
+        "opencode": {"name": "opencode", "docs_url": "https://opencode.ai/docs"},
+        # ===================
+        # Web Frameworks
+        # ===================
+        # FastAPI
+        "fastapi": {"name": "fastapi", "docs_url": "https://fastapi.tiangolo.com"},
+        # React
+        "react": {"name": "react", "docs_url": "https://react.dev"},
+        # Next.js
+        "nextjs": {"name": "nextjs", "docs_url": "https://nextjs.org/docs"},
+        "next.js": {"name": "nextjs", "docs_url": "https://nextjs.org/docs"},
+        # Spartan (Angular UI)
+        "spartan": {"name": "spartan", "docs_url": "https://www.spartan.ng/documentation"},
+        "spartan ui": {"name": "spartan", "docs_url": "https://www.spartan.ng/documentation"},
+        # ngx-sonner (Angular Toast)
+        "ngx-sonner": {"name": "ngx-sonner", "docs_url": "https://ngx-sonner.vercel.app"},
+        # Sharp (Image Processing)
+        "sharp": {"name": "sharp", "docs_url": "https://sharp.pixelplumbing.com"},
+        # ===================
+        # Payment & Business APIs
+        # ===================
+        # Stripe
+        "stripe": {"name": "stripe", "docs_url": "https://docs.stripe.com/api"},
+        # Plaid
+        "plaid": {"name": "plaid", "docs_url": "https://plaid.com/docs"},
+        # Mixpanel
+        "mixpanel": {"name": "mixpanel", "docs_url": "https://developer.mixpanel.com"},
+        # ===================
+        # Communication APIs
+        # ===================
+        # Twilio
+        "twilio": {"name": "twilio", "docs_url": "https://www.twilio.com/docs"},
+        "twilio sms": {"name": "twilio", "docs_url": "https://www.twilio.com/docs/sms"},
+        # SendGrid
+        "sendgrid": {"name": "sendgrid", "docs_url": "https://www.twilio.com/docs/sendgrid"},
+        # Slack
+        "slack": {"name": "slack", "docs_url": "https://api.slack.com/docs"},
+        "slack api": {"name": "slack", "docs_url": "https://api.slack.com/docs"},
+        "slack block kit": {"name": "slack", "docs_url": "https://api.slack.com/block-kit"},
+        # Notion
+        "notion": {"name": "notion", "docs_url": "https://developers.notion.com"},
+        "notion api": {"name": "notion", "docs_url": "https://developers.notion.com/reference"},
+        # Discord
+        "discord": {"name": "discord", "docs_url": "https://discord.com/developers/docs"},
+        "discord api": {"name": "discord", "docs_url": "https://discord.com/developers/docs"},
+        # ===================
+        # Cloud & Infrastructure
+        # ===================
+        # AWS
+        "aws": {"name": "aws", "docs_url": "https://docs.aws.amazon.com"},
+        "amazon": {"name": "aws", "docs_url": "https://docs.aws.amazon.com"},
+        "aws-sdk-s3-v3": {
+            "name": "aws",
+            "docs_url": "https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/s3",
+        },
+        "aws codeartifact": {"name": "aws", "docs_url": "https://docs.aws.amazon.com/codeartifact"},
+        # Cloudflare
+        "cloudflare": {"name": "cloudflare", "docs_url": "https://developers.cloudflare.com"},
+        "cloudflare waf": {
+            "name": "cloudflare",
+            "docs_url": "https://developers.cloudflare.com/waf",
+        },
+        # Vercel
+        "vercel": {"name": "vercel", "docs_url": "https://vercel.com/docs"},
+        # Netlify
+        "netlify": {"name": "netlify", "docs_url": "https://docs.netlify.com"},
+        # Supabase
+        "supabase": {"name": "supabase", "docs_url": "https://supabase.com/docs"},
+        # Firebase
+        "firebase": {"name": "firebase", "docs_url": "https://firebase.google.com/docs"},
+        # ===================
+        # Social & Marketing APIs
+        # ===================
         # Meta/Facebook
-        "meta": "facebook",
-        "meta graph": "facebook",
-        "meta graph api": "facebook",
-        "facebook graph": "facebook",
-        "facebook graph api": "facebook",
-        "instagram api": "facebook",
-        "instagram graph": "facebook",
-        # Google
+        "meta": {"name": "facebook", "docs_url": "https://developers.facebook.com/docs"},
+        "meta graph": {
+            "name": "facebook",
+            "docs_url": "https://developers.facebook.com/docs/graph-api",
+        },
+        "meta graph api": {
+            "name": "facebook",
+            "docs_url": "https://developers.facebook.com/docs/graph-api",
+        },
+        "facebook": {"name": "facebook", "docs_url": "https://developers.facebook.com/docs"},
+        "facebook graph": {
+            "name": "facebook",
+            "docs_url": "https://developers.facebook.com/docs/graph-api",
+        },
+        "facebook graph api": {
+            "name": "facebook",
+            "docs_url": "https://developers.facebook.com/docs/graph-api",
+        },
+        "instagram api": {
+            "name": "facebook",
+            "docs_url": "https://developers.facebook.com/docs/instagram-api",
+        },
+        "instagram graph": {
+            "name": "facebook",
+            "docs_url": "https://developers.facebook.com/docs/instagram-api",
+        },
+        # TikTok
+        "tiktok": {"name": "tiktok", "docs_url": "https://developers.tiktok.com/doc"},
+        "tiktok business": {
+            "name": "tiktok",
+            "docs_url": "https://business-api.tiktok.com/portal/docs",
+        },
+        "tiktok business api": {
+            "name": "tiktok",
+            "docs_url": "https://business-api.tiktok.com/portal/docs",
+        },
+        "tiktok ads": {"name": "tiktok", "docs_url": "https://business-api.tiktok.com/portal/docs"},
+        # ===================
+        # Google APIs
+        # ===================
+        "google": {"name": "google", "docs_url": "https://developers.google.com"},
+        "google cloud": {"name": "google", "docs_url": "https://cloud.google.com/docs"},
         "google site verification": {
             "name": "google",
             "docs_url": "https://developers.google.com/site-verification",
@@ -83,94 +289,31 @@ class APIDocsDetector:
         },
         "google analytics 4": {
             "name": "google",
-            "docs_url": "https://developers.google.com/analytics/devguides/config/admin/v1",
+            "docs_url": "https://developers.google.com/analytics/devguides/reporting/data/v1",
         },
         "ga4": {
             "name": "google",
-            "docs_url": "https://developers.google.com/analytics/devguides/config/admin/v1",
+            "docs_url": "https://developers.google.com/analytics/devguides/reporting/data/v1",
         },
-        "gemini": {"name": "google", "docs_url": "https://ai.google.dev/docs"},
-        "google gemini": {"name": "google", "docs_url": "https://ai.google.dev/docs"},
-        "vertex ai": {"name": "google", "docs_url": "https://cloud.google.com/vertex-ai/docs"},
-        "google cloud": {"name": "google", "docs_url": "https://cloud.google.com/docs"},
-        # TikTok
-        "tiktok": {"name": "tiktok", "docs_url": "https://developers.tiktok.com/doc"},
-        "tiktok business": {
-            "name": "tiktok",
-            "docs_url": "https://business-api.tiktok.com/portal/docs",
+        # ===================
+        # CMS & Content APIs
+        # ===================
+        # Webflow
+        "webflow": {"name": "webflow", "docs_url": "https://developers.webflow.com"},
+        # WordPress
+        "wordpress": {"name": "wordpress", "docs_url": "https://developer.wordpress.org"},
+        "wordpress plugin directory": {
+            "name": "wordpress",
+            "docs_url": "https://developer.wordpress.org/plugins",
         },
-        "tiktok business api": {
-            "name": "tiktok",
-            "docs_url": "https://business-api.tiktok.com/portal/docs",
-        },
-        "tiktok ads": {"name": "tiktok", "docs_url": "https://business-api.tiktok.com/portal/docs"},
-        # OpenAI
-        "openai": {"name": "openai", "docs_url": "https://platform.openai.com/docs"},
-        "chatgpt": {"name": "openai", "docs_url": "https://platform.openai.com/docs"},
-        "gpt": {"name": "openai", "docs_url": "https://platform.openai.com/docs"},
-        "dall-e": {"name": "openai", "docs_url": "https://platform.openai.com/docs/guides/images"},
-        "dalle": {"name": "openai", "docs_url": "https://platform.openai.com/docs/guides/images"},
-        # Anthropic
-        "anthropic": {"name": "anthropic", "docs_url": "https://docs.anthropic.com"},
-        "claude": {"name": "anthropic", "docs_url": "https://docs.anthropic.com"},
-        "claude api": {"name": "anthropic", "docs_url": "https://docs.anthropic.com"},
-        # Notion
-        "notion": {"name": "notion", "docs_url": "https://developers.notion.com"},
-        "notion api": {"name": "notion", "docs_url": "https://developers.notion.com/reference"},
-        # Slack
-        "slack": {"name": "slack", "docs_url": "https://api.slack.com/docs"},
-        "slack api": {"name": "slack", "docs_url": "https://api.slack.com/docs"},
-        "slack block kit": {"name": "slack", "docs_url": "https://api.slack.com/block-kit"},
-        # ElevenLabs
-        "elevenlabs": {"name": "elevenlabs", "docs_url": "https://elevenlabs.io/docs"},
-        "eleven labs": {"name": "elevenlabs", "docs_url": "https://elevenlabs.io/docs"},
-        "11labs": {"name": "elevenlabs", "docs_url": "https://elevenlabs.io/docs"},
-        # Fal.ai
-        "fal": {"name": "fal", "docs_url": "https://fal.ai/docs"},
-        "fal.ai": {"name": "fal", "docs_url": "https://fal.ai/docs"},
-        "fal ai": {"name": "fal", "docs_url": "https://fal.ai/docs"},
-        # Cloudflare
-        "cloudflare": {"name": "cloudflare", "docs_url": "https://developers.cloudflare.com"},
-        "cloudflare waf": {
-            "name": "cloudflare",
-            "docs_url": "https://developers.cloudflare.com/waf",
-        },
-        # AWS
-        "aws": {"name": "aws", "docs_url": "https://docs.aws.amazon.com"},
-        "amazon": {"name": "aws", "docs_url": "https://docs.aws.amazon.com"},
-        # Stripe
-        "stripe": {"name": "stripe", "docs_url": "https://docs.stripe.com/api"},
-        # Twilio
-        "twilio": {"name": "twilio", "docs_url": "https://www.twilio.com/docs/messaging"},
-        "twilio sms": {"name": "twilio", "docs_url": "https://www.twilio.com/docs/sms"},
-        # SendGrid
-        "sendgrid": {"name": "sendgrid", "docs_url": "https://www.twilio.com/docs/sendgrid"},
-        # Plaid
-        "plaid": {"name": "plaid", "docs_url": "https://plaid.com/docs"},
-        # Vercel
-        "vercel": {"name": "vercel", "docs_url": "https://vercel.com/docs"},
-        # Spartan (Angular UI)
-        "spartan": {"name": "spartan", "docs_url": "https://www.spartan.ng/documentation"},
-        "spartan ui": {"name": "spartan", "docs_url": "https://www.spartan.ng/documentation"},
-        # Mureka
-        "mureka": {"name": "mureka", "docs_url": "https://docs.mureka.ai"},
-        # Replicate
-        "replicate": {"name": "replicate", "docs_url": "https://replicate.com/docs"},
-        # Hugging Face
-        "huggingface": {"name": "huggingface", "docs_url": "https://huggingface.co/docs"},
-        "hugging face": {"name": "huggingface", "docs_url": "https://huggingface.co/docs"},
-        "hf": {"name": "huggingface", "docs_url": "https://huggingface.co/docs"},
-        # Supabase
-        "supabase": {"name": "supabase", "docs_url": "https://supabase.com/docs"},
-        # Firebase
-        "firebase": {"name": "firebase", "docs_url": "https://firebase.google.com/docs"},
-        # Vercel
-        "vercel": {"name": "vercel", "docs_url": "https://vercel.com/docs"},
-        # Netlify
-        "netlify": {"name": "netlify", "docs_url": "https://docs.netlify.com"},
-        # Discord
-        "discord": {"name": "discord", "docs_url": "https://discord.com/developers/docs"},
-        "discord api": {"name": "discord", "docs_url": "https://discord.com/developers/docs"},
+        # ===================
+        # Other APIs
+        # ===================
+        # GitHub
+        "github": {"name": "github", "docs_url": "https://docs.github.com"},
+        "github api": {"name": "github", "docs_url": "https://docs.github.com/rest"},
+        # Pixabay
+        "pixabay": {"name": "pixabay", "docs_url": "https://pixabay.com/api/docs"},
     }
 
     def __init__(self):

@@ -9,6 +9,7 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 
 from .api_docs import APIDocsDetector, APIDocsExtractor, APIDocumentation
+from .cache import api_docs_cache
 from .changelog import ChangelogFetcher
 from .comparison import CATEGORY_ASPECTS, TechComparator, detect_category
 from .config import (
@@ -24,7 +25,7 @@ from .extractor import DataExtractor
 from .github import GitHubClient, RepoInfo
 from .images import PixabayClient
 from .registry import PackageInfo, PackageRegistryClient
-from .search import SearxSearcher
+from .search import SearxSearcher, SearchHit
 from .service_health import ServiceHealthChecker
 from .tracking import get_tracker
 
@@ -984,6 +985,27 @@ async def api_docs(
     result = ""
     docs_url = None
 
+    # Check cache first
+    cache_key = f"api_docs:{api_name.lower()}:{topic.lower()}"
+    cached_result = await api_docs_cache.get(cache_key)
+    if cached_result:
+        # Track cache hit
+        tracker.track_usage(
+            tool_name="api_docs",
+            reasoning=reasoning,
+            parameters={
+                "api_name": api_name,
+                "topic": topic,
+                "docs_url": "cached",
+                "max_results": max_results,
+            },
+            response_time_ms=(time.time() - start_time) * 1000,
+            success=True,
+            error_message=None,
+            response_size=len(cached_result.encode("utf-8")),
+        )
+        return cached_result
+
     try:
         max_results = max(1, min(max_results, 3))  # Clamp to 1-3
 
@@ -1033,16 +1055,31 @@ async def api_docs(
             # Get the domain for site-specific search
             docs_domain = api_docs_detector.get_docs_domain(docs_url)
 
-            # Search within the docs site
-            search_query = f"site:{docs_domain} {topic}"
+            # IMPROVED SEARCH STRATEGY:
+            # Primary: Search with API name + topic (works better than site: operator in SearXNG)
+            search_query = f"{api_name} {topic} documentation"
             doc_results = await searcher.search(
-                search_query, category="general", max_results=max_results * 2
+                search_query, category="it", max_results=max_results * 3
             )
 
-            # Fallback 1: If site-specific search fails, try broader search with API name + topic
+            # Filter & sort: prefer results from the official docs domain
+            if doc_results:
+                doc_results = sorted(
+                    doc_results,
+                    key=lambda r: (0 if docs_domain in r.url else 1),
+                )
+
+            # Fallback 1: Try API reference style search
             if not doc_results:
-                # Try searching with the API name + topic directly
-                for search_term in search_terms[:2]:  # Try first 2 terms
+                doc_results = await searcher.search(
+                    f"{api_name} API reference {topic}",
+                    category="it",
+                    max_results=max_results * 2,
+                )
+
+            # Fallback 2: Try with each search term variation
+            if not doc_results:
+                for search_term in search_terms[:2]:
                     doc_results = await searcher.search(
                         f"{search_term} {topic}",
                         category="it",
@@ -1051,27 +1088,15 @@ async def api_docs(
                     if doc_results:
                         break
 
-            # Fallback 2: Try without site restriction but filter results
-            if not doc_results:
-                doc_results = await searcher.search(
-                    f"{api_name} API {topic} documentation",
-                    category="general",
-                    max_results=max_results * 2,
-                )
-
             # Fallback 3: Simplify the topic (extract key terms) and try again
             if not doc_results and len(topic.split()) > 3:
-                # Extract key terms from complex topics
-                # e.g., "v3 audio tags SSML break tags emotional delivery" -> "audio SSML"
-                import re as re_module
-
                 # Remove version numbers, common filler words
-                simplified = re_module.sub(r"\bv\d+\b", "", topic, flags=re_module.IGNORECASE)
-                simplified = re_module.sub(
+                simplified = re.sub(r"\bv\d+\b", "", topic, flags=re.IGNORECASE)
+                simplified = re.sub(
                     r"\b(api|the|a|an|and|or|for|to|with|using)\b",
                     "",
                     simplified,
-                    flags=re_module.IGNORECASE,
+                    flags=re.IGNORECASE,
                 )
                 key_terms = [w for w in simplified.split() if len(w) > 2][:3]
                 if key_terms:
@@ -1082,13 +1107,32 @@ async def api_docs(
                         max_results=max_results * 2,
                     )
 
-            # Fallback 4: If all searches fail, try crawling the base docs URL directly
+            # Fallback 4: Try common documentation URL paths directly
+            if not doc_results and docs_url:
+                common_paths = [
+                    "/api/{topic}",
+                    "/reference/{topic}",
+                    "/docs/{topic}",
+                    "/guide/{topic}",
+                    "/docs/api/{topic}",
+                    "/{topic}",
+                ]
+                topic_slug = topic.lower().replace(" ", "-").replace("_", "-")
+                for path_pattern in common_paths:
+                    try_url = docs_url.rstrip("/") + path_pattern.format(topic=topic_slug)
+                    try:
+                        content = await crawler_client.fetch(try_url, max_chars=15000)
+                        if content and len(content) > 500:
+                            doc_results = [SearchHit(title=topic, url=try_url, snippet="")]
+                            break
+                    except Exception:  # noqa: BLE001
+                        continue
+
+            # Fallback 5: Crawl the base docs URL directly
             if not doc_results and docs_url:
                 try:
-                    # Crawl the base docs URL - it often has navigation/overview
                     base_content = await crawler_client.fetch(docs_url, max_chars=15000)
                     if base_content and len(base_content) > 200:
-                        # Create a minimal result from the base docs
                         doc = APIDocumentation(
                             api_name=api_name,
                             topic=topic,
@@ -1106,7 +1150,7 @@ async def api_docs(
                         result = clamp_text(result, MAX_RESPONSE_CHARS)
                         success = True
                 except Exception:  # noqa: BLE001
-                    pass  # Fall through to error
+                    pass
 
             if not doc_results and not success:
                 result = (
@@ -1130,7 +1174,6 @@ async def api_docs(
                         all_content.append(content)
                         source_urls.append(doc_result.url)
                     except Exception:  # noqa: BLE001
-                        # Skip failed crawls
                         pass
 
                 if not all_content:
@@ -1140,17 +1183,14 @@ async def api_docs(
                     error_msg = "Failed to crawl docs"
                     success = False
                 else:
-                    # Combine content for extraction
                     combined_content = "\n\n".join(all_content)
 
-                    # Extract structured information
                     overview = api_docs_extractor.extract_overview(combined_content)
                     parameters = api_docs_extractor.extract_parameters(combined_content)
                     examples = api_docs_extractor.extract_examples(combined_content)
                     notes = api_docs_extractor.extract_notes(combined_content)
                     related_links = api_docs_extractor.extract_links(combined_content, docs_url)
 
-                    # Create documentation object
                     doc = APIDocumentation(
                         api_name=api_name,
                         topic=topic,
@@ -1163,16 +1203,18 @@ async def api_docs(
                         source_urls=source_urls,
                     )
 
-                    # Format and return
                     result = api_docs_extractor.format_documentation(doc)
                     result = clamp_text(result, MAX_RESPONSE_CHARS)
                     success = True
+
+        # Cache successful results
+        if success and result:
+            await api_docs_cache.set(cache_key, result)
 
     except Exception as exc:  # noqa: BLE001
         error_msg = str(exc)
         result = f"Failed to fetch API documentation: {exc}\n\nTry using web_search or crawl_url directly."
     finally:
-        # Track usage
         response_time = (time.time() - start_time) * 1000
         tracker.track_usage(
             tool_name="api_docs",

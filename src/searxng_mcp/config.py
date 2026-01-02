@@ -39,6 +39,15 @@ MAX_RESPONSE_CHARS: Final[int] = _env_int("MCP_MAX_RESPONSE_CHARS", 8000)
 CRAWL_MAX_CHARS: Final[int] = _env_int("SEARXNG_CRAWL_MAX_CHARS", 8000)
 PIXABAY_API_KEY: Final[str] = _env_str("PIXABAY_API_KEY", "")
 
+# Retry configuration
+MAX_RETRIES: Final[int] = _env_int("SEARXNG_MAX_RETRIES", 3)
+RETRY_BASE_DELAY: Final[float] = _env_float("SEARXNG_RETRY_BASE_DELAY", 0.5)
+RETRY_MAX_DELAY: Final[float] = _env_float("SEARXNG_RETRY_MAX_DELAY", 4.0)
+
+# Cache configuration
+CACHE_TTL_API_DOCS: Final[int] = _env_int("CACHE_TTL_API_DOCS", 86400)  # 1 day
+CACHE_TTL_CRAWL: Final[int] = _env_int("CACHE_TTL_CRAWL", 1800)  # 30 minutes
+
 TRUNCATION_SUFFIX: Final[str] = (
     "\n\n… [output truncated to stay within MCP response limits. Ask for a specific section if"
     " you need more.]"
@@ -67,5 +76,10 @@ __all__ = [
     "MAX_RESPONSE_CHARS",
     "CRAWL_MAX_CHARS",
     "PIXABAY_API_KEY",
+    "MAX_RETRIES",
+    "RETRY_BASE_DELAY",
+    "RETRY_MAX_DELAY",
+    "CACHE_TTL_API_DOCS",
+    "CACHE_TTL_CRAWL",
     "clamp_text",
 ]
