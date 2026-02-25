@@ -1,1 +1,1 @@
-"""SearXNG-powered MCP server."""
+"""SearXNG-powered MCP server with Exa AI integration."""

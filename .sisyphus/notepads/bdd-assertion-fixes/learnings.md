@@ -1,0 +1,4 @@
+- crawl_url failures are prefixed with "Crawl failed for {url}: ..."; normal content may include "error".
+- extract_data returns JSON with keys like "type" and "source"; failures start with "Data extraction failed for".
+- check_service_status returns JSON with "status" and "current_incidents" (plus error/suggestion on unknown services).
+- get_changelog returns JSON with "releases" entries and a "summary" including "breaking_changes_count".

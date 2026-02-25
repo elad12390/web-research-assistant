@@ -1,0 +1,1 @@
+- Hardcoded selectors {"title": "h1", "intro": "p"} for the IANA fields step because pytest-bdd data tables are not fixtures.

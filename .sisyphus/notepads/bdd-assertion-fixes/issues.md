@@ -1,0 +1,1 @@
+- basedpyright reports existing unknown-type warnings in BDD step files due to untyped fixtures and missing stubs.

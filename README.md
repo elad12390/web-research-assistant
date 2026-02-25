@@ -7,7 +7,7 @@
 
 Comprehensive Model Context Protocol (MCP) server that provides web research and discovery capabilities.
 Includes **13 tools**, **4 resources**, and **5 prompts** for searching, crawling, and analyzing web content, powered by your local Docker SearXNG 
-instance, the [`crawl4ai`](https://github.com/unclecode/crawl4ai) project, and Pixabay API:
+instance, [Exa AI](https://exa.ai/) neural search, the [`crawl4ai`](https://github.com/unclecode/crawl4ai) project, and Pixabay API:
 
 1. `web_search` &mdash; federated search across multiple engines via SearXNG
 2. `search_examples` &mdash; find code examples, tutorials, and articles (defaults to recent content)
@@ -42,6 +42,18 @@ for optimal AI agent integration.
 - `check_service_health` - Multi-service status monitoring
 
 ## Quick Start
+
+### Option 1: Full Docker Setup (Recommended)
+
+Everything runs in Docker - no Python installation needed:
+
+```bash
+./docker-start.sh
+```
+
+This starts both SearXNG and the MCP server in containers. See [DOCKER_SETUP.md](DOCKER_SETUP.md) for details.
+
+### Option 2: Python + Docker SearXNG
 
 1. **Set up SearXNG** (5 minutes):
    ```bash
@@ -87,6 +99,7 @@ for optimal AI agent integration.
 
 ### Optional
 
+- **Exa API key** for neural search - [Get API key](https://dashboard.exa.ai/api-keys) (recommended for better search results)
 - **Pixabay API key** for image search - [Get free key](https://pixabay.com/api/docs/)
 - **Playwright browsers** for advanced crawling (auto-installed with `crawl4ai-setup`)
 
@@ -289,6 +302,8 @@ Environment variables let you adapt the server without touching code:
 | `MCP_MAX_RESPONSE_CHARS` | `8000` | Overall response limit applied to every tool reply. |
 | `SEARXNG_MCP_USER_AGENT` | `web-research-assistant/0.1` | User-Agent header for outward HTTP calls. |
 | `PIXABAY_API_KEY` | _(empty)_ | API key for Pixabay image search. Get free key at [pixabay.com/api/docs](https://pixabay.com/api/docs/). |
+| `EXA_API_KEY` | _(empty)_ | API key for Exa AI neural search. Get key at [dashboard.exa.ai](https://dashboard.exa.ai/api-keys). |
+| `SEARCH_PROVIDER` | `auto` | Search provider: `exa` (Exa only), `searxng` (SearXNG only), or `auto` (try Exa first, fallback to SearXNG). |
 | `MCP_USAGE_LOG` | `~/.config/web-research-assistant/usage.json` | Location for usage analytics data. |
 
 ## Development
@@ -300,6 +315,7 @@ web-research-assistant/
 ├── src/searxng_mcp/     # Source code
 │   ├── config.py        # Configuration and environment
 │   ├── search.py        # SearXNG integration
+│   ├── exa.py           # Exa AI neural search client
 │   ├── crawler.py       # Crawl4AI wrapper
 │   ├── images.py        # Pixabay client
 │   ├── registry.py      # Package registries (npm, PyPI, crates, Go)
@@ -307,7 +323,7 @@ web-research-assistant/
 │   ├── errors.py        # Error parser (language/framework detection)
 │   ├── api_docs.py      # API docs discovery (NO hardcoded URLs)
 │   ├── tracking.py      # Usage analytics
-│   └── server.py        # MCP server + 9 tools
+│   └── server.py        # MCP server + 13 tools
 ├── docs/                # Documentation (27 files)
 └── [config files]
 ```

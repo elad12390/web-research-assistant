@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-01-06
+
+### Added
+- **Exa AI Integration** - Neural search as an alternative/fallback to SearXNG
+  - New `exa.py` module with full Exa API support
+  - `EXA_API_KEY` environment variable for API authentication
+  - `SEARCH_PROVIDER` config: `"exa"`, `"searxng"`, or `"auto"` (default)
+  - Auto mode: tries Exa first, falls back to SearXNG on failure
+  - Exa provides semantic/neural search for better relevance on technical queries
+
+### Improved
+- **Unified Search** - All search tools now use a unified search function that can leverage either Exa or SearXNG
+- **Better Reliability** - With `SEARCH_PROVIDER=auto`, searches work even if SearXNG is down (when Exa API key is configured)
+
+### Configuration
+- `EXA_API_KEY` - Your Exa AI API key (get one at https://dashboard.exa.ai/api-keys)
+- `SEARCH_PROVIDER` - Choose search backend: `"auto"` (default), `"exa"`, or `"searxng"`
+
 ## [0.3.0] - 2025-12-03
 
 ### Added
@@ -97,7 +115,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration documentation
 - 40+ design and implementation docs
 
-[Unreleased]: https://github.com/elad12390/web-research-assistant/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/elad12390/web-research-assistant/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/elad12390/web-research-assistant/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/elad12390/web-research-assistant/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/elad12390/web-research-assistant/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/elad12390/web-research-assistant/releases/tag/v0.1.0

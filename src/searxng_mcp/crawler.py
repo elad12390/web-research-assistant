@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import random
 
-from crawl4ai import AsyncWebCrawler, CacheMode, CrawlerRunConfig
+import html2text
+from scrapling.fetchers import AsyncFetcher
 
 from .config import (
     CRAWL_MAX_CHARS,
@@ -13,38 +14,48 @@ from .config import (
     clamp_text,
 )
 
+_html_converter = html2text.HTML2Text()
+_html_converter.ignore_links = False
+_html_converter.body_width = 0
+_html_converter.ignore_images = True
+_html_converter.ignore_emphasis = False
+_html_converter.skip_internal_links = True
+
 
 class CrawlerClient:
-    """Lightweight wrapper around crawl4ai's async crawler with retry support."""
-
-    def __init__(self, *, cache_mode: CacheMode = CacheMode.BYPASS) -> None:
-        self.cache_mode = cache_mode
+    """Lightweight wrapper around scrapling's AsyncFetcher with retry support."""
 
     async def fetch(self, url: str, *, max_chars: int | None = None) -> str:
         """Fetch *url* and return cleaned markdown, trimmed to *max_chars*.
 
+        Uses scrapling AsyncFetcher with html2text for markdown conversion.
         Includes automatic retry with exponential backoff for connection errors.
         """
-
-        run_config = CrawlerRunConfig(cache_mode=self.cache_mode)
         last_error: Exception | None = None
 
         for attempt in range(MAX_RETRIES):
             try:
-                async with AsyncWebCrawler() as crawler:
-                    result = await crawler.arun(url=url, config=run_config)
-
-                if getattr(result, "error", None):
-                    raise RuntimeError(str(result.error))  # type: ignore
-
-                text = (
-                    getattr(result, "markdown", None)
-                    or getattr(result, "content", None)
-                    or getattr(result, "html", None)
-                    or ""
+                response = await AsyncFetcher.get(
+                    url,
+                    stealthy_headers=True,
+                    timeout=30,
+                    verify=False,
+                    retries=1,
+                    follow_redirects=True,
                 )
 
-                text = text.strip()
+                if response.status >= 400:
+                    raise RuntimeError(f"HTTP {response.status} for {url}")
+
+                html = response.html_content or ""
+                if not html.strip():
+                    raise RuntimeError("Crawl completed but returned no readable content.")
+
+                text = _html_converter.handle(html).strip()
+                if not text:
+                    text = response.get_all_text(separator="\n", strip=True) or ""
+                    text = text.strip()
+
                 if not text:
                     raise RuntimeError("Crawl completed but returned no readable content.")
 
@@ -61,7 +72,6 @@ class CrawlerClient:
                     await asyncio.sleep(delay)
                 continue
 
-        # All retries exhausted
         raise last_error or RuntimeError("All connection attempts failed")
 
     async def fetch_raw(self, url: str, *, max_chars: int = 50000) -> str:
@@ -76,19 +86,23 @@ class CrawlerClient:
 
         Includes automatic retry with exponential backoff for connection errors.
         """
-        run_config = CrawlerRunConfig(cache_mode=self.cache_mode)
         last_error: Exception | None = None
 
         for attempt in range(MAX_RETRIES):
             try:
-                async with AsyncWebCrawler() as crawler:
-                    result = await crawler.arun(url=url, config=run_config)
+                response = await AsyncFetcher.get(
+                    url,
+                    stealthy_headers=True,
+                    timeout=30,
+                    verify=False,
+                    retries=1,
+                    follow_redirects=True,
+                )
 
-                if getattr(result, "error", None):
-                    raise RuntimeError(str(result.error))  # type: ignore
+                if response.status >= 400:
+                    raise RuntimeError(f"HTTP {response.status} for {url}")
 
-                html = getattr(result, "html", None) or ""
-
+                html = response.html_content or ""
                 html = html.strip()
                 if not html:
                     raise RuntimeError("Crawl completed but returned no HTML content.")
@@ -105,5 +119,4 @@ class CrawlerClient:
                     await asyncio.sleep(delay)
                 continue
 
-        # All retries exhausted
         raise last_error or RuntimeError("All connection attempts failed")

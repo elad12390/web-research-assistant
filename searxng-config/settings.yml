@@ -1,0 +1,146 @@
+use_default_settings: true
+
+general:
+  debug: false
+  instance_name: "Web Research Assistant"
+  privacypolicy_url: false
+  donation_url: false
+  contact_url: false
+  enable_metrics: false
+
+search:
+  safe_search: 0
+  autocomplete: "duckduckgo"
+  default_lang: "en"
+  formats:
+    - html
+    - json
+
+server:
+  port: 8080
+  bind_address: "0.0.0.0"
+  secret_key: "bdd-test-runner-f8a2c1e9d4b7563012ef"
+  limiter: false
+  image_proxy: true
+
+outgoing:
+  request_timeout: 10.0
+  max_request_timeout: 15.0
+
+engines:
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    disabled: false
+
+  - name: brave
+    engine: brave
+    shortcut: br
+    disabled: false
+
+  - name: qwant
+    engine: qwant
+    shortcut: qw
+    disabled: false
+
+  - name: github
+    engine: github
+    shortcut: gh
+    disabled: false
+
+  - name: stackoverflow
+    engine: stackoverflow
+    shortcut: so
+    disabled: false
+
+  - name: gitlab
+    engine: gitlab
+    shortcut: gl
+    disabled: false
+
+  - name: codeberg
+    engine: codeberg
+    shortcut: cb
+    disabled: false
+
+  - name: mdn
+    engine: mdn
+    shortcut: mdn
+    disabled: false
+
+  - name: devdocs
+    engine: devdocs
+    shortcut: dd
+    disabled: false
+
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp
+    disabled: false
+
+  - name: reddit
+    engine: reddit
+    shortcut: re
+    disabled: false
+
+  - name: hackernews
+    engine: hackernews
+    shortcut: hn
+    disabled: false
+
+  - name: pypi
+    engine: pypi
+    shortcut: pypi
+    disabled: false
+
+  - name: npm
+    engine: npm
+    shortcut: npm
+    disabled: false
+
+  - name: crates
+    engine: crates
+    shortcut: crt
+    disabled: false
+
+  - name: youtube
+    engine: youtube_noapi
+    shortcut: yt
+    disabled: false
+
+  - name: google
+    disabled: true
+
+  - name: bing
+    disabled: true
+
+categories_as_tabs:
+  general:
+    - duckduckgo
+    - brave
+    - qwant
+    - wikipedia
+
+  it:
+    - github
+    - stackoverflow
+    - gitlab
+    - codeberg
+    - mdn
+    - devdocs
+    - hackernews
+    - reddit
+    - pypi
+    - npm
+    - crates
+
+  science:
+    - wikipedia
+    - stackoverflow
+
+  news:
+    - reddit
+    - hackernews
+
+  videos:
+    - youtube

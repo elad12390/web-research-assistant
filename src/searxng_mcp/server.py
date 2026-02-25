@@ -17,21 +17,105 @@ from .config import (
     DEFAULT_CATEGORY,
     DEFAULT_MAX_RESULTS,
     MAX_RESPONSE_CHARS,
+    SEARCH_PROVIDER,
     clamp_text,
 )
 from .crawler import CrawlerClient
 from .errors import ErrorParser
+from .exa import ExaSearcher
 from .extractor import DataExtractor
 from .github import GitHubClient, RepoInfo
 from .images import PixabayClient
 from .registry import PackageInfo, PackageRegistryClient
-from .search import SearxSearcher, SearchHit
+from .search import SearchHit, SearxSearcher
 from .service_health import ServiceHealthChecker
 from .tracking import get_tracker
 
 mcp = FastMCP("web-research-assistant")
-searcher = SearxSearcher()
+searxng_searcher = SearxSearcher()
+exa_searcher = ExaSearcher()
 crawler_client = CrawlerClient()
+
+
+async def unified_search(
+    query: str,
+    *,
+    category: str = "general",
+    max_results: int = 5,
+    time_range: str | None = None,
+) -> list[SearchHit]:
+    """Unified search that uses Exa or SearXNG based on configuration.
+
+    Provider selection:
+    - "exa": Use Exa AI only
+    - "searxng": Use SearXNG only
+    - "auto" (default): Try Exa first if API key is set, fallback to SearXNG
+
+    Args:
+        query: Search query string
+        category: Search category (used for SearXNG, mapped to Exa categories)
+        max_results: Maximum number of results
+        time_range: Time filter (day, week, month, year)
+
+    Returns:
+        List of SearchHit objects
+    """
+    provider = SEARCH_PROVIDER.lower()
+
+    # Map SearXNG categories to Exa categories where applicable
+    exa_category_map = {
+        "it": None,  # No direct mapping, use general search
+        "science": "research paper",
+        "news": "news",
+        "general": None,
+    }
+
+    # Try Exa first if configured
+    if provider in ("exa", "auto") and exa_searcher.has_api_key():
+        try:
+            exa_category = exa_category_map.get(category)
+
+            # Build date filters from time_range
+            start_date = None
+            if time_range:
+                from datetime import datetime, timedelta
+
+                now = datetime.utcnow()
+                if time_range == "day":
+                    start_date = (now - timedelta(days=1)).isoformat() + "Z"
+                elif time_range == "week":
+                    start_date = (now - timedelta(weeks=1)).isoformat() + "Z"
+                elif time_range == "month":
+                    start_date = (now - timedelta(days=30)).isoformat() + "Z"
+                elif time_range == "year":
+                    start_date = (now - timedelta(days=365)).isoformat() + "Z"
+
+            return await exa_searcher.search(
+                query,
+                num_results=max_results,
+                category=exa_category,
+                start_published_date=start_date,
+            )
+        except Exception as e:
+            # If Exa fails and we're in auto mode, try SearXNG
+            if provider == "auto":
+                logging.warning(f"Exa search failed, falling back to SearXNG: {e}")
+            else:
+                raise
+
+    # Use SearXNG
+    return await searxng_searcher.search(
+        query,
+        category=category,
+        max_results=max_results,
+        time_range=time_range,
+    )
+
+
+# Backward compatibility: keep 'searcher' as alias for use in tech_comparator etc.
+searcher = searxng_searcher
+
+
 registry_client = PackageRegistryClient()
 github_client = GitHubClient()
 pixabay_client = PixabayClient()
@@ -59,7 +143,7 @@ async def web_search(
     query: Annotated[str, "Natural-language web query"],
     reasoning: Annotated[str, "Why you're using this tool (required for analytics)"],
     category: Annotated[
-        str, "Optional SearXNG category (general, images, news, it, science, etc.)"
+        str, "Optional category (general, images, news, it, science, etc.)"
     ] = DEFAULT_CATEGORY,
     max_results: Annotated[int, "How many ranked hits to return (1-10)"] = DEFAULT_MAX_RESULTS,
 ) -> str:
@@ -69,9 +153,10 @@ async def web_search(
     success = False
     error_msg = None
     result = ""
+    provider_used = SEARCH_PROVIDER
 
     try:
-        hits = await searcher.search(query, category=category, max_results=max_results)
+        hits = await unified_search(query, category=category, max_results=max_results)
         if not hits:
             result = f"No results for '{query}' in category '{category}'."
         else:
@@ -90,6 +175,7 @@ async def web_search(
                 "query": query,
                 "category": category,
                 "max_results": max_results,
+                "provider": provider_used,
             },
             response_time_ms=response_time,
             success=success,
@@ -106,7 +192,7 @@ async def crawl_url(
     reasoning: Annotated[str, "Why you're crawling this URL (required for analytics)"],
     max_chars: Annotated[int, "Trim textual result to this many characters"] = CRAWL_MAX_CHARS,
 ) -> str:
-    """Fetch a URL with crawl4ai when you need the actual page text for quoting or analysis."""
+    """Fetch a URL and return the page text as markdown for quoting or analysis."""
 
     start_time = time.time()
     success = False
@@ -136,9 +222,110 @@ async def crawl_url(
     return result
 
 
-def _format_package_info(info: PackageInfo) -> str:
-    """Format PackageInfo into readable text response."""
+@mcp.tool()
+async def stealth_scrape(
+    url: Annotated[str, "HTTP(S) URL of a page protected by anti-bot measures (Cloudflare, etc.)"],
+    reasoning: Annotated[
+        str, "Why you need stealth scraping for this URL (required for analytics)"
+    ],
+    max_chars: Annotated[int, "Trim textual result to this many characters"] = CRAWL_MAX_CHARS,
+    wait_selector: Annotated[
+        str | None, "CSS selector to wait for before extracting content"
+    ] = None,
+    solve_cloudflare: Annotated[
+        bool, "Attempt to solve Cloudflare challenges automatically"
+    ] = True,
+    headless: Annotated[bool, "Run browser in headless mode (no visible window)"] = True,
+) -> str:
+    """Scrape a URL using a stealth browser that bypasses anti-bot protections.
 
+    Uses scrapling's StealthyFetcher with Patchright (hardened Playwright) to evade
+    Cloudflare, DataDome, and similar anti-bot systems. Much slower than crawl_url
+    but works on protected sites.
+
+    Requires browser binaries: run 'scrapling install' once before first use.
+
+    When to use:
+    - crawl_url returns a Cloudflare challenge page or empty content
+    - The target site blocks automated requests
+    - JavaScript rendering is required for the content to appear
+    - You need to wait for a specific element to load
+
+    Examples:
+    - stealth_scrape("https://protected-site.com/pricing")
+    - stealth_scrape("https://spa-app.com/data", wait_selector=".results-table")
+    """
+    import html2text
+    from scrapling.fetchers import StealthyFetcher
+
+    start_time = time.time()
+    success = False
+    error_msg = None
+    result = ""
+
+    try:
+        fetch_kwargs: dict = {
+            "headless": headless,
+            "solve_cloudflare": solve_cloudflare,
+            "block_webrtc": True,
+            "google_search": True,
+            "network_idle": True,
+            "timeout": 30000,
+        }
+        if wait_selector:
+            fetch_kwargs["wait_selector"] = wait_selector
+            fetch_kwargs["wait_selector_state"] = "visible"
+
+        response = await StealthyFetcher.async_fetch(url, **fetch_kwargs)
+
+        html = response.html_content or ""
+        if not html.strip():
+            raise RuntimeError("Stealth scrape returned no content.")
+
+        converter = html2text.HTML2Text()
+        converter.ignore_links = False
+        converter.body_width = 0
+        converter.ignore_images = True
+        text = converter.handle(html).strip()
+
+        if not text:
+            text = response.get_all_text(separator="\n", strip=True) or ""
+            text = text.strip()
+
+        if not text:
+            raise RuntimeError("Stealth scrape returned no readable content.")
+
+        limit = max_chars or CRAWL_MAX_CHARS
+        result = clamp_text(text, min(limit, MAX_RESPONSE_CHARS))
+        success = True
+
+    except Exception as exc:  # noqa: BLE001
+        error_msg = str(exc)
+        result = (
+            f"Stealth scrape failed for {url}: {exc}\n\n"
+            "Make sure browser binaries are installed: run 'scrapling install'"
+        )
+    finally:
+        response_time = (time.time() - start_time) * 1000
+        tracker.track_usage(
+            tool_name="stealth_scrape",
+            reasoning=reasoning,
+            parameters={
+                "url": url,
+                "max_chars": max_chars,
+                "wait_selector": wait_selector,
+                "solve_cloudflare": solve_cloudflare,
+            },
+            response_time_ms=response_time,
+            success=success,
+            error_message=error_msg,
+            response_size=len(result.encode("utf-8")),
+        )
+
+    return result
+
+
+def _format_package_info(info: PackageInfo) -> str:
     lines = [
         f"Package: {info.name} ({info.registry})",
         "─" * 50,
@@ -297,7 +484,7 @@ async def search_examples(
             enhanced_query = f"{query} (example OR tutorial OR guide)"
 
         # Use 'it' category for better tech content
-        hits = await searcher.search(
+        hits = await unified_search(
             enhanced_query,
             category="it",  # IT/tech category for better results
             max_results=max_results,
@@ -424,8 +611,8 @@ async def search_images(
     try:
         # Check if API key is configured
         if not pixabay_client.has_api_key():
-            # Fallback: Use web search for images instead
-            fallback_results = await searcher.search(
+            # Fallback: Use web search for images instead (use SearXNG directly for images)
+            fallback_results = await searxng_searcher.search(
                 f"{query} stock photo free",
                 category="images",
                 max_results=max_results,
@@ -717,7 +904,7 @@ async def github_repo(
                     suggestions.append(
                         f"- Check if '{owner_guess}' is the correct organization/user"
                     )
-                    suggestions.append(f"- The repository may have been renamed or deleted")
+                    suggestions.append("- The repository may have been renamed or deleted")
                     suggestions.append(f"- Try searching: https://github.com/search?q={parts[1]}")
 
             result = (
@@ -728,7 +915,7 @@ async def github_repo(
                 f"- There's a typo in the owner or repository name\n"
             )
             if suggestions:
-                result += f"\nSuggestions:\n" + "\n".join(suggestions)
+                result += "\nSuggestions:\n" + "\n".join(suggestions)
         elif exc.response.status_code == 403:
             result = (
                 f"Access denied to repository '{repo}' (HTTP 403).\n\n"
@@ -812,7 +999,7 @@ async def translate_error(
         search_query = error_parser.build_search_query(parsed)
 
         # Search for solutions (request more to allow for filtering)
-        hits = await searcher.search(
+        hits = await unified_search(
             search_query,
             category="it",
             max_results=max_results * 2,  # Get extra results for filtering
@@ -1018,7 +1205,7 @@ async def api_docs(
         if not docs_url:
             # Fallback: Search for official docs using multiple search terms
             for search_term in search_terms:
-                search_results = await searcher.search(
+                search_results = await unified_search(
                     f"{search_term} official documentation",
                     category="general",
                     max_results=5,
@@ -1058,7 +1245,7 @@ async def api_docs(
             # IMPROVED SEARCH STRATEGY:
             # Primary: Search with API name + topic (works better than site: operator in SearXNG)
             search_query = f"{api_name} {topic} documentation"
-            doc_results = await searcher.search(
+            doc_results = await unified_search(
                 search_query, category="it", max_results=max_results * 3
             )
 
@@ -1066,12 +1253,12 @@ async def api_docs(
             if doc_results:
                 doc_results = sorted(
                     doc_results,
-                    key=lambda r: (0 if docs_domain in r.url else 1),
+                    key=lambda r: 0 if docs_domain in r.url else 1,
                 )
 
             # Fallback 1: Try API reference style search
             if not doc_results:
-                doc_results = await searcher.search(
+                doc_results = await unified_search(
                     f"{api_name} API reference {topic}",
                     category="it",
                     max_results=max_results * 2,
@@ -1080,7 +1267,7 @@ async def api_docs(
             # Fallback 2: Try with each search term variation
             if not doc_results:
                 for search_term in search_terms[:2]:
-                    doc_results = await searcher.search(
+                    doc_results = await unified_search(
                         f"{search_term} {topic}",
                         category="it",
                         max_results=max_results * 2,
@@ -1101,7 +1288,7 @@ async def api_docs(
                 key_terms = [w for w in simplified.split() if len(w) > 2][:3]
                 if key_terms:
                     simplified_topic = " ".join(key_terms)
-                    doc_results = await searcher.search(
+                    doc_results = await unified_search(
                         f"{api_name} {simplified_topic}",
                         category="it",
                         max_results=max_results * 2,
@@ -1279,8 +1466,9 @@ async def extract_data(
     result = ""
 
     try:
-        # Fetch raw HTML
-        html = await crawler_client.fetch_raw(url)
+        # Fetch raw HTML — use generous limit since extraction needs the full page;
+        # the final JSON output is clamped by MAX_RESPONSE_CHARS anyway.
+        html = await crawler_client.fetch_raw(url, max_chars=2_000_000)
 
         # Extract based on type
         if extract_type == "table":

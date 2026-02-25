@@ -39,9 +39,24 @@ class UsageTracker:
             with open(self.log_file, encoding="utf-8") as f:
                 return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
-            # Reset if corrupted
-            self._ensure_log_file()
-            return self._read_log()
+            # File is corrupted or missing — delete and recreate
+            try:
+                self.log_file.unlink(missing_ok=True)
+            except OSError:
+                pass
+            initial_data = {
+                "server_name": "web-research-assistant",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "sessions": [],
+                "summary": {
+                    "total_calls": 0,
+                    "tools": {},
+                    "most_used_tool": None,
+                    "average_response_time": 0.0,
+                },
+            }
+            self._write_log(initial_data)
+            return initial_data
 
     def _write_log(self, data: dict[str, Any]) -> None:
         """Write log data to file."""

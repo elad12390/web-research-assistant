@@ -38,6 +38,10 @@ MAX_SNIPPET_CHARS: Final[int] = _env_int("SEARXNG_MAX_SNIPPET_CHARS", 400)
 MAX_RESPONSE_CHARS: Final[int] = _env_int("MCP_MAX_RESPONSE_CHARS", 8000)
 CRAWL_MAX_CHARS: Final[int] = _env_int("SEARXNG_CRAWL_MAX_CHARS", 8000)
 PIXABAY_API_KEY: Final[str] = _env_str("PIXABAY_API_KEY", "")
+EXA_API_KEY: Final[str] = _env_str("EXA_API_KEY", "")
+
+# Search provider preference: "searxng", "exa", or "auto" (try exa first, fallback to searxng)
+SEARCH_PROVIDER: Final[str] = _env_str("SEARCH_PROVIDER", "auto")
 
 # Retry configuration
 MAX_RETRIES: Final[int] = _env_int("SEARXNG_MAX_RETRIES", 3)
@@ -76,6 +80,8 @@ __all__ = [
     "MAX_RESPONSE_CHARS",
     "CRAWL_MAX_CHARS",
     "PIXABAY_API_KEY",
+    "EXA_API_KEY",
+    "SEARCH_PROVIDER",
     "MAX_RETRIES",
     "RETRY_BASE_DELAY",
     "RETRY_MAX_DELAY",

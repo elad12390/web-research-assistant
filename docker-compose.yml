@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # SearXNG search engine
+  searxng:
+    container_name: searxng
+    image: searxng/searxng:latest
+    ports:
+      - "2288:8080"
+    volumes:
+      - ./searxng-config:/etc/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:2288/
+    restart: unless-stopped
+    networks:
+      - web-research-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/search?q=test"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Web Research Assistant MCP Server
+  web-research-assistant:
+    container_name: web-research-assistant
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      searxng:
+        condition: service_healthy
+    environment:
+      # SearXNG connection
+      - SEARXNG_BASE_URL=http://searxng:8080/search
+      
+      # Optional API keys (add your keys here)
+      - EXA_API_KEY=${EXA_API_KEY:-}
+      - PIXABAY_API_KEY=${PIXABAY_API_KEY:-}
+      
+      # Search provider preference
+      - SEARCH_PROVIDER=${SEARCH_PROVIDER:-auto}
+      
+      # Configuration
+      - SEARXNG_DEFAULT_CATEGORY=general
+      - SEARXNG_DEFAULT_RESULTS=5
+      - SEARXNG_MAX_RESULTS=10
+      - SEARXNG_CRAWL_MAX_CHARS=8000
+      - MCP_MAX_RESPONSE_CHARS=8000
+      
+      # Usage logging (mounted volume)
+      - MCP_USAGE_LOG=/app/data/usage.json
+    volumes:
+      # Mount usage data directory
+      - ./data:/app/data
+      
+      # Optional: Mount source for development
+      # - ./src:/app/src:ro
+    networks:
+      - web-research-network
+    restart: unless-stopped
+    # Expose stdio for MCP communication (when needed)
+    stdin_open: true
+    tty: true
+
+networks:
+  web-research-network:
+    driver: bridge
+
+volumes:
+  searxng-config:
+    driver: local

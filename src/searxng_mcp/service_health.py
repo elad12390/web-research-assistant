@@ -407,8 +407,9 @@ class ServiceHealthChecker:
 
     async def _fetch_statuspage_api(self, status_url: str) -> dict | None:
         """Try to fetch status from Statuspage.io API (many services use this)."""
-        import httpx
         from urllib.parse import urlparse
+
+        import httpx
 
         # Parse base URL more carefully
         parsed = urlparse(status_url)

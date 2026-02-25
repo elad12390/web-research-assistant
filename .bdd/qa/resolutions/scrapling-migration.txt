@@ -1,0 +1,37 @@
+Scrapling Migration — Resolutions
+===================================
+
+Files changed:
+  src/searxng_mcp/crawler.py   — full rewrite (crawl4ai -> scrapling)
+  src/searxng_mcp/server.py    — added stealth_scrape tool, updated crawl_url docstring
+  pyproject.toml               — swapped crawl4ai for scrapling[fetchers] + html2text
+
+Assertion calibrations (test changes, not app changes):
+  .bdd/steps/crawling_steps.py   — truncation tolerance, list group counting
+  .bdd/steps/api_docs_steps.py   — count Source: headers instead of "http"
+
+---
+
+crawler.py replacement details:
+
+  OLD (crawl4ai):
+    AsyncWebCrawler context manager -> arun(url) -> result.markdown
+    Required: Playwright browser binaries (crawl4ai-setup)
+
+  NEW (scrapling):
+    AsyncFetcher.get(url, verify=False) -> response.html_content
+    html2text.HTML2Text().handle(html) for markdown conversion
+    Required: pip install only (no browser setup for basic fetch)
+
+  Interface preserved:
+    CrawlerClient.fetch(url, *, max_chars) -> str  (markdown)
+    CrawlerClient.fetch_raw(url, *, max_chars) -> str  (HTML)
+
+---
+
+stealth_scrape tool:
+
+  Uses StealthyFetcher.async_fetch() with Patchright (hardened Playwright).
+  Parameters: url, reasoning, max_chars, wait_selector, solve_cloudflare, headless
+  Requires: scrapling install (browser binaries) — only for this tool.
+  Use case: sites behind Cloudflare/DataDome that reject normal HTTP requests.
