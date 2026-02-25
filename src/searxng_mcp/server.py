@@ -20,7 +20,8 @@ from .config import (
     SEARCH_PROVIDER,
     clamp_text,
 )
-from .crawler import CrawlerClient
+from .crawler import CrawlerClient, FetchMethod, FetchResult, FetchStatus
+from .domain_health import get_domain_health_tracker
 from .errors import ErrorParser
 from .exa import ExaSearcher
 from .extractor import DataExtractor
@@ -70,8 +71,13 @@ async def unified_search(
         "general": None,
     }
 
-    # Try Exa first if configured
-    if provider in ("exa", "auto") and exa_searcher.has_api_key():
+    # Try Exa first if configured and quota is healthy
+    exa_available = (
+        provider in ("exa", "auto")
+        and exa_searcher.has_api_key()
+        and not exa_searcher.quota_exhausted
+    )
+    if exa_available:
         try:
             exa_category = exa_category_map.get(category)
 
@@ -127,6 +133,11 @@ tech_comparator = TechComparator(searcher, github_client, registry_client)
 changelog_fetcher = ChangelogFetcher(github_client, registry_client)
 service_health_checker = ServiceHealthChecker(crawler_client)
 tracker = get_tracker()
+domain_tracker = get_domain_health_tracker()
+
+
+def _record_domain_health(result: FetchResult) -> None:
+    domain_tracker.record(result)
 
 
 def _format_search_hits(hits):
@@ -198,21 +209,42 @@ async def crawl_url(
     success = False
     error_msg = None
     result = ""
+    fetch_result: FetchResult | None = None
 
     try:
-        text = await crawler_client.fetch(url, max_chars=max_chars)
-        result = clamp_text(text, MAX_RESPONSE_CHARS)
-        success = True
+        fetch_result = await crawler_client.resilient_fetch(url, max_chars=max_chars)
+        _record_domain_health(fetch_result)
+
+        if fetch_result.status == FetchStatus.OK:
+            result = clamp_text(fetch_result.content, MAX_RESPONSE_CHARS)
+            success = True
+        elif fetch_result.status == FetchStatus.BLOCKED:
+            result = (
+                f"Blocked by anti-bot protection on {fetch_result.domain} "
+                f"(HTTP {fetch_result.http_status}). Tried: {fetch_result.method.value}."
+            )
+        elif fetch_result.status == FetchStatus.RATE_LIMITED:
+            result = f"Rate limited by {fetch_result.domain} (HTTP 429). Please wait and retry."
+        else:
+            error_msg = fetch_result.error_message
+            result = (
+                f"Crawl failed for {url}: {fetch_result.error_message or fetch_result.status.value}"
+            )
     except Exception as exc:  # noqa: BLE001
         error_msg = str(exc)
         result = f"Crawl failed for {url}: {exc}"
     finally:
-        # Track usage
         response_time = (time.time() - start_time) * 1000
         tracker.track_usage(
             tool_name="crawl_url",
             reasoning=reasoning,
-            parameters={"url": url, "max_chars": max_chars},
+            parameters={
+                "url": url,
+                "max_chars": max_chars,
+                "domain": fetch_result.domain if fetch_result else "",
+                "fetch_method": fetch_result.method.value if fetch_result else "",
+                "fetch_status": fetch_result.status.value if fetch_result else "",
+            },
             response_time_ms=response_time,
             success=success,
             error_message=error_msg,
@@ -255,9 +287,12 @@ async def stealth_scrape(
     - stealth_scrape("https://protected-site.com/pricing")
     - stealth_scrape("https://spa-app.com/data", wait_selector=".results-table")
     """
+    import urllib.parse
+
     import html2text
     from scrapling.fetchers import StealthyFetcher
 
+    domain = urllib.parse.urlparse(url).netloc
     start_time = time.time()
     success = False
     error_msg = None
@@ -299,11 +334,30 @@ async def stealth_scrape(
         result = clamp_text(text, min(limit, MAX_RESPONSE_CHARS))
         success = True
 
+        _record_domain_health(
+            FetchResult(
+                content=result,
+                status=FetchStatus.OK,
+                method=FetchMethod.STEALTH,
+                domain=domain,
+                http_status=getattr(response, "status", None),
+            )
+        )
+
     except Exception as exc:  # noqa: BLE001
         error_msg = str(exc)
         result = (
             f"Stealth scrape failed for {url}: {exc}\n\n"
             "Make sure browser binaries are installed: run 'scrapling install'"
+        )
+        _record_domain_health(
+            FetchResult(
+                content="",
+                status=FetchStatus.ERROR,
+                method=FetchMethod.STEALTH,
+                domain=domain,
+                error_message=error_msg,
+            )
         )
     finally:
         response_time = (time.time() - start_time) * 1000
@@ -315,6 +369,8 @@ async def stealth_scrape(
                 "max_chars": max_chars,
                 "wait_selector": wait_selector,
                 "solve_cloudflare": solve_cloudflare,
+                "domain": domain,
+                "fetch_method": "stealth",
             },
             response_time_ms=response_time,
             success=success,
@@ -1516,6 +1572,8 @@ async def extract_data(
     finally:
         # Track usage
         response_time = (time.time() - start_time) * 1000
+        import urllib.parse as _urlparse
+
         tracker.track_usage(
             tool_name="extract_data",
             reasoning=reasoning,
@@ -1524,6 +1582,7 @@ async def extract_data(
                 "extract_type": extract_type,
                 "has_selectors": selectors is not None,
                 "max_items": max_items,
+                "domain": _urlparse.urlparse(url).netloc,
             },
             response_time_ms=response_time,
             success=success,
@@ -1838,6 +1897,12 @@ async def get_changelog_resource(registry: str, package: str) -> str:
         return json.dumps(changelog, indent=2, ensure_ascii=False)
     except Exception as exc:  # noqa: BLE001
         return f"Failed to fetch changelog for '{package}': {exc}"
+
+
+@mcp.resource("domain-health://report")
+async def get_domain_health_resource() -> str:
+    """Per-domain fetch success/failure rates, block rates, and stealth escalation stats."""
+    return domain_tracker.format_report()
 
 
 # =============================================================================

@@ -48,6 +48,11 @@ MAX_RETRIES: Final[int] = _env_int("SEARXNG_MAX_RETRIES", 3)
 RETRY_BASE_DELAY: Final[float] = _env_float("SEARXNG_RETRY_BASE_DELAY", 0.5)
 RETRY_MAX_DELAY: Final[float] = _env_float("SEARXNG_RETRY_MAX_DELAY", 4.0)
 
+# Domain-aware fetch throttling
+DOMAIN_MAX_CONCURRENT: Final[int] = _env_int("DOMAIN_MAX_CONCURRENT", 2)
+DOMAIN_MIN_DELAY: Final[float] = _env_float("DOMAIN_MIN_DELAY", 0.5)
+STEALTH_TIMEOUT: Final[int] = _env_int("STEALTH_TIMEOUT", 30000)
+
 # Cache configuration
 CACHE_TTL_API_DOCS: Final[int] = _env_int("CACHE_TTL_API_DOCS", 86400)  # 1 day
 CACHE_TTL_CRAWL: Final[int] = _env_int("CACHE_TTL_CRAWL", 1800)  # 30 minutes
@@ -85,6 +90,9 @@ __all__ = [
     "MAX_RETRIES",
     "RETRY_BASE_DELAY",
     "RETRY_MAX_DELAY",
+    "DOMAIN_MAX_CONCURRENT",
+    "DOMAIN_MIN_DELAY",
+    "STEALTH_TIMEOUT",
     "CACHE_TTL_API_DOCS",
     "CACHE_TTL_CRAWL",
     "clamp_text",

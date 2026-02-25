@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import random
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
@@ -42,10 +43,32 @@ class ExaSearcher:
     def __init__(self, api_key: str | None = None, timeout: float = HTTP_TIMEOUT) -> None:
         self.api_key = api_key or EXA_API_KEY
         self.timeout = timeout
+        self._quota_limit: int | None = None
+        self._quota_remaining: int | None = None
+        self._quota_reset: int | None = None
+        self._quota_exhausted: bool = False
 
     def has_api_key(self) -> bool:
         """Check if an API key is configured."""
         return bool(self.api_key)
+
+    def _update_quota_from_headers(self, headers: httpx.Headers) -> None:
+        """Extract and store rate-limit info from response headers."""
+        if "x-ratelimit-limit" in headers:
+            try:
+                self._quota_limit = int(headers["x-ratelimit-limit"])
+            except (ValueError, TypeError):
+                pass
+        if "x-ratelimit-remaining" in headers:
+            try:
+                self._quota_remaining = int(headers["x-ratelimit-remaining"])
+            except (ValueError, TypeError):
+                pass
+        if "x-ratelimit-reset" in headers:
+            try:
+                self._quota_reset = int(headers["x-ratelimit-reset"])
+            except (ValueError, TypeError):
+                pass
 
     async def search(
         self,
@@ -84,7 +107,7 @@ class ExaSearcher:
             raise ValueError("Exa API key not configured. Set EXA_API_KEY environment variable.")
 
         # Build request payload
-        payload: dict = {
+        payload: dict[str, Any] = {
             "query": query,
             "numResults": min(num_results, 100),
             "type": search_type,
@@ -122,6 +145,7 @@ class ExaSearcher:
                         json=payload,
                     )
                     response.raise_for_status()
+                    self._update_quota_from_headers(response.headers)
                     data = response.json()
 
                 hits: list[SearchHit] = []
@@ -144,6 +168,19 @@ class ExaSearcher:
 
                 return hits
 
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    self._quota_exhausted = True
+                    self._update_quota_from_headers(e.response.headers)
+                    raise
+                last_error = e
+                if attempt < MAX_RETRIES - 1:
+                    delay = min(
+                        RETRY_BASE_DELAY * (2**attempt) + random.uniform(0, 0.5),
+                        RETRY_MAX_DELAY,
+                    )
+                    await asyncio.sleep(delay)
+                continue
             except (httpx.RequestError, httpx.TimeoutException, httpx.ConnectError) as e:
                 last_error = e
                 if attempt < MAX_RETRIES - 1:
@@ -184,7 +221,7 @@ class ExaSearcher:
         if not self.api_key:
             raise ValueError("Exa API key not configured. Set EXA_API_KEY environment variable.")
 
-        payload: dict = {
+        payload: dict[str, Any] = {
             "query": query,
             "numResults": min(num_results, 100),
             "type": search_type,
@@ -201,14 +238,21 @@ class ExaSearcher:
             "Content-Type": "application/json",
         }
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(
-                f"{self.API_BASE}/search",
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.API_BASE}/search",
+                    headers=headers,
+                    json=payload,
+                )
+                response.raise_for_status()
+                self._update_quota_from_headers(response.headers)
+                data = response.json()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                self._quota_exhausted = True
+                self._update_quota_from_headers(e.response.headers)
+            raise
 
         results: list[ExaResult] = []
         for item in data.get("results", []):
@@ -233,6 +277,29 @@ class ExaSearcher:
             )
 
         return results
+
+    def is_quota_healthy(self) -> bool:
+        """Returns False if quota is exhausted or remaining < 10%."""
+        if self._quota_exhausted:
+            return False
+        if self._quota_limit and self._quota_remaining is not None:
+            return self._quota_remaining >= (self._quota_limit * 0.1)
+        return True
+
+    def get_quota_status(self) -> dict[str, Any]:
+        """Returns dict with limit, remaining, reset, exhausted, healthy."""
+        return {
+            "limit": self._quota_limit,
+            "remaining": self._quota_remaining,
+            "reset": self._quota_reset,
+            "exhausted": self._quota_exhausted,
+            "healthy": self.is_quota_healthy(),
+        }
+
+    @property
+    def quota_exhausted(self) -> bool:
+        """Returns True if quota is exhausted or remaining < 10% of limit."""
+        return not self.is_quota_healthy()
 
 
 __all__ = ["ExaSearcher", "ExaResult"]
