@@ -17,6 +17,7 @@ from .config import (
     DEFAULT_CATEGORY,
     DEFAULT_MAX_RESULTS,
     MAX_RESPONSE_CHARS,
+    PROXY_URL,
     SEARCH_PROVIDER,
     clamp_text,
 )
@@ -202,6 +203,11 @@ async def crawl_url(
     url: Annotated[str, "HTTP(S) URL (ideally from web_search output)"],
     reasoning: Annotated[str, "Why you're crawling this URL (required for analytics)"],
     max_chars: Annotated[int, "Trim textual result to this many characters"] = CRAWL_MAX_CHARS,
+    country: Annotated[
+        str,
+        "ISO 3166-1 alpha-2 country code to route proxy through (e.g. 'IL', 'DE', 'US')."
+        " Auto-detected from domain ccTLD if not specified.",
+    ] = "",
 ) -> str:
     """Fetch a URL and return the page text as markdown for quoting or analysis."""
 
@@ -212,7 +218,9 @@ async def crawl_url(
     fetch_result: FetchResult | None = None
 
     try:
-        fetch_result = await crawler_client.resilient_fetch(url, max_chars=max_chars)
+        fetch_result = await crawler_client.resilient_fetch(
+            url, max_chars=max_chars, country=country
+        )
         _record_domain_health(fetch_result)
 
         if fetch_result.status == FetchStatus.OK:
@@ -268,6 +276,11 @@ async def stealth_scrape(
         bool, "Attempt to solve Cloudflare challenges automatically"
     ] = True,
     headless: Annotated[bool, "Run browser in headless mode (no visible window)"] = True,
+    country: Annotated[
+        str,
+        "ISO 3166-1 alpha-2 country code to route proxy through (e.g. 'IL', 'DE', 'US')."
+        " Auto-detected from domain ccTLD if not specified.",
+    ] = "",
 ) -> str:
     """Scrape a URL using a stealth browser that bypasses anti-bot protections.
 
@@ -299,6 +312,8 @@ async def stealth_scrape(
     result = ""
 
     try:
+        from .crawler import _detect_country_code, _geo_targeted_proxy
+
         fetch_kwargs: dict = {
             "headless": headless,
             "solve_cloudflare": solve_cloudflare,
@@ -310,6 +325,12 @@ async def stealth_scrape(
         if wait_selector:
             fetch_kwargs["wait_selector"] = wait_selector
             fetch_kwargs["wait_selector_state"] = "visible"
+
+        if country or PROXY_URL:
+            geo_code = country.upper() if country else _detect_country_code(domain)
+            geo_proxy = _geo_targeted_proxy(PROXY_URL, geo_code)
+            if geo_proxy:
+                fetch_kwargs["proxy"] = geo_proxy
 
         response = await StealthyFetcher.async_fetch(url, **fetch_kwargs)
 

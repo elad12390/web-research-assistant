@@ -53,6 +53,9 @@ DOMAIN_MAX_CONCURRENT: Final[int] = _env_int("DOMAIN_MAX_CONCURRENT", 2)
 DOMAIN_MIN_DELAY: Final[float] = _env_float("DOMAIN_MIN_DELAY", 0.5)
 STEALTH_TIMEOUT: Final[int] = _env_int("STEALTH_TIMEOUT", 30000)
 
+# Proxy configuration
+PROXY_URL: Final[str] = _env_str("PROXY_URL", "")
+
 # Cache configuration
 CACHE_TTL_API_DOCS: Final[int] = _env_int("CACHE_TTL_API_DOCS", 86400)  # 1 day
 CACHE_TTL_CRAWL: Final[int] = _env_int("CACHE_TTL_CRAWL", 1800)  # 30 minutes
@@ -93,6 +96,7 @@ __all__ = [
     "DOMAIN_MAX_CONCURRENT",
     "DOMAIN_MIN_DELAY",
     "STEALTH_TIMEOUT",
+    "PROXY_URL",
     "CACHE_TTL_API_DOCS",
     "CACHE_TTL_CRAWL",
     "clamp_text",

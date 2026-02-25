@@ -7,6 +7,8 @@ import urllib.parse
 from dataclasses import dataclass
 from enum import Enum
 
+from typing import Any
+
 import html2text
 from scrapling.fetchers import AsyncFetcher
 
@@ -15,6 +17,7 @@ from .config import (
     DOMAIN_MAX_CONCURRENT,
     DOMAIN_MIN_DELAY,
     MAX_RETRIES,
+    PROXY_URL,
     RETRY_BASE_DELAY,
     RETRY_MAX_DELAY,
     STEALTH_TIMEOUT,
@@ -31,6 +34,60 @@ _BLOCK_SIGNATURES = (
     "challenge-platform",
 )
 
+_GENERIC_TLDS = frozenset(
+    {
+        "com",
+        "org",
+        "net",
+        "edu",
+        "gov",
+        "mil",
+        "int",
+        "io",
+        "ai",
+        "tv",
+        "me",
+        "co",
+        "app",
+        "dev",
+        "xyz",
+        "info",
+        "biz",
+        "pro",
+        "name",
+        "museum",
+        "aero",
+    }
+)
+
+_CCTLD_TO_COUNTRY: dict[str, str] = {
+    "uk": "GB",
+}
+
+
+def _detect_country_code(domain: str) -> str:
+    """Derive ISO 3166-1 alpha-2 country code from domain's ccTLD. Returns '' if generic."""
+    tld = domain.rstrip(".").rsplit(".", maxsplit=1)[-1].lower()
+    if tld in _GENERIC_TLDS or len(tld) != 2:
+        return ""
+    return _CCTLD_TO_COUNTRY.get(tld, tld.upper())
+
+
+def _geo_targeted_proxy(proxy_url: str, country_code: str) -> str:
+    """Inject _country-XX into Evomi-style proxy password. Skips if already targeted."""
+    if not country_code or not proxy_url:
+        return proxy_url
+    parsed = urllib.parse.urlparse(proxy_url)
+    if not parsed.password:
+        return proxy_url
+    if "_country-" in parsed.password:
+        return proxy_url
+    new_password = f"{parsed.password}_country-{country_code}"
+    netloc = f"{parsed.username}:{new_password}@{parsed.hostname}"
+    if parsed.port:
+        netloc += f":{parsed.port}"
+    return urllib.parse.urlunparse(parsed._replace(netloc=netloc))
+
 
 class FetchStatus(Enum):
     OK = "ok"
@@ -42,7 +99,9 @@ class FetchStatus(Enum):
 
 class FetchMethod(Enum):
     NORMAL = "normal"
+    NORMAL_PROXY = "normal+proxy"
     STEALTH = "stealth"
+    STEALTH_PROXY = "stealth+proxy"
 
 
 @dataclass
@@ -125,8 +184,9 @@ class CrawlerClient:
         *,
         max_chars: int | None = None,
         raw: bool = False,
+        country: str = "",
     ) -> FetchResult:
-        """Fetch with automatic escalation: AsyncFetcher -> StealthyFetcher -> blocked."""
+        """Fetch with automatic escalation: normal → normal+proxy → stealth → stealth+proxy."""
         domain = _extract_domain(url)
         limit = max_chars or CRAWL_MAX_CHARS
         start = time.monotonic()
@@ -135,12 +195,35 @@ class CrawlerClient:
         if normal_result.status == FetchStatus.OK:
             return normal_result
 
-        if normal_result.status in (FetchStatus.BLOCKED, FetchStatus.RATE_LIMITED):
-            stealth_result = await self._try_stealth(url, domain=domain, limit=limit, raw=raw)
-            stealth_result.response_time_ms = (time.monotonic() - start) * 1000
+        if normal_result.status not in (FetchStatus.BLOCKED, FetchStatus.RATE_LIMITED):
+            return normal_result
+
+        geo_code = country.upper() if country else _detect_country_code(domain)
+        geo_proxy = _geo_targeted_proxy(PROXY_URL, geo_code)
+
+        if geo_proxy:
+            proxy_result = await self._try_normal(
+                url, domain=domain, limit=limit, raw=raw, proxy=geo_proxy
+            )
+            proxy_result.method = FetchMethod.NORMAL_PROXY
+            proxy_result.response_time_ms = (time.monotonic() - start) * 1000
+            if proxy_result.status == FetchStatus.OK:
+                return proxy_result
+
+        stealth_result = await self._try_stealth(url, domain=domain, limit=limit, raw=raw)
+        stealth_result.response_time_ms = (time.monotonic() - start) * 1000
+        if stealth_result.status == FetchStatus.OK:
             return stealth_result
 
-        return normal_result
+        if geo_proxy and stealth_result.status in (FetchStatus.BLOCKED, FetchStatus.RATE_LIMITED):
+            stealth_proxy_result = await self._try_stealth(
+                url, domain=domain, limit=limit, raw=raw, proxy=geo_proxy
+            )
+            stealth_proxy_result.method = FetchMethod.STEALTH_PROXY
+            stealth_proxy_result.response_time_ms = (time.monotonic() - start) * 1000
+            return stealth_proxy_result
+
+        return stealth_result
 
     async def _try_normal(
         self,
@@ -149,6 +232,7 @@ class CrawlerClient:
         domain: str,
         limit: int,
         raw: bool,
+        proxy: str = "",
     ) -> FetchResult:
         start = time.monotonic()
         last_error: Exception | None = None
@@ -156,14 +240,17 @@ class CrawlerClient:
         for attempt in range(MAX_RETRIES):
             await self._throttle.acquire(domain)
             try:
-                response = await AsyncFetcher.get(
-                    url,
-                    stealthy_headers=True,
-                    timeout=30,
-                    verify=False,
-                    retries=1,
-                    follow_redirects=True,
-                )
+                kwargs: dict[str, Any] = {
+                    "stealthy_headers": True,
+                    "timeout": 30,
+                    "verify": False,
+                    "retries": 1,
+                    "follow_redirects": True,
+                }
+                if proxy:
+                    kwargs["proxy"] = proxy
+
+                response = await AsyncFetcher.get(url, **kwargs)
 
                 elapsed_ms = (time.monotonic() - start) * 1000
 
@@ -258,21 +345,25 @@ class CrawlerClient:
         domain: str,
         limit: int,
         raw: bool,
+        proxy: str = "",
     ) -> FetchResult:
         start = time.monotonic()
         await self._throttle.acquire(domain)
         try:
             from scrapling.fetchers import StealthyFetcher
 
-            response = await StealthyFetcher.async_fetch(
-                url,
-                headless=True,
-                solve_cloudflare=True,
-                block_webrtc=True,
-                google_search=True,
-                network_idle=True,
-                timeout=STEALTH_TIMEOUT,
-            )
+            kwargs: dict[str, Any] = {
+                "headless": True,
+                "solve_cloudflare": True,
+                "block_webrtc": True,
+                "google_search": True,
+                "network_idle": True,
+                "timeout": STEALTH_TIMEOUT,
+            }
+            if proxy:
+                kwargs["proxy"] = proxy
+
+            response = await StealthyFetcher.async_fetch(url, **kwargs)
 
             elapsed_ms = (time.monotonic() - start) * 1000
 
