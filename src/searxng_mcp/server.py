@@ -25,6 +25,7 @@ from .crawler import CrawlerClient, FetchMethod, FetchResult, FetchStatus
 from .domain_health import get_domain_health_tracker
 from .errors import ErrorParser
 from .exa import ExaSearcher
+from .tavily import TavilySearcher
 from .extractor import DataExtractor
 from .github import GitHubClient, RepoInfo
 from .images import PixabayClient
@@ -36,6 +37,7 @@ from .tracking import get_tracker
 mcp = FastMCP("web-research-assistant")
 searxng_searcher = SearxSearcher()
 exa_searcher = ExaSearcher()
+tavily_searcher = TavilySearcher()
 crawler_client = CrawlerClient()
 
 
@@ -46,12 +48,13 @@ async def unified_search(
     max_results: int = 5,
     time_range: str | None = None,
 ) -> list[SearchHit]:
-    """Unified search that uses Exa or SearXNG based on configuration.
+    """Unified search that uses Exa, Tavily, or SearXNG based on configuration.
 
     Provider selection:
     - "exa": Use Exa AI only
+    - "tavily": Use Tavily only
     - "searxng": Use SearXNG only
-    - "auto" (default): Try Exa first if API key is set, fallback to SearXNG
+    - "auto" (default): Try Exa first, then Tavily, fallback to SearXNG
 
     Args:
         query: Search query string
@@ -104,9 +107,25 @@ async def unified_search(
                 start_published_date=start_date,
             )
         except Exception as e:
-            # If Exa fails and we're in auto mode, try SearXNG
+            # If Exa fails and we're in auto mode, try next provider
             if provider == "auto":
-                logging.warning(f"Exa search failed, falling back to SearXNG: {e}")
+                logging.warning(f"Exa search failed, falling back to Tavily: {e}")
+            else:
+                raise
+
+    # Try Tavily if configured
+    tavily_available = provider in ("tavily", "auto") and tavily_searcher.has_api_key()
+    if tavily_available:
+        try:
+            return await tavily_searcher.search(
+                query,
+                category=category,
+                max_results=max_results,
+                time_range=time_range,
+            )
+        except Exception as e:
+            if provider == "auto":
+                logging.warning(f"Tavily search failed, falling back to SearXNG: {e}")
             else:
                 raise
 
