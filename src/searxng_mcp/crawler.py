@@ -243,7 +243,7 @@ class CrawlerClient:
                 kwargs: dict[str, Any] = {
                     "stealthy_headers": True,
                     "timeout": 30,
-                    "verify": False,
+                    "verify": True,
                     "retries": 1,
                     "follow_redirects": True,
                 }
