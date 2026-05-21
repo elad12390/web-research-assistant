@@ -61,7 +61,7 @@ CACHE_TTL_API_DOCS: Final[int] = _env_int("CACHE_TTL_API_DOCS", 86400)  # 1 day
 CACHE_TTL_CRAWL: Final[int] = _env_int("CACHE_TTL_CRAWL", 1800)  # 30 minutes
 
 TRUNCATION_SUFFIX: Final[str] = (
-    "\n\n… [output truncated to stay within MCP response limits. Ask for a specific section if"
+    "\n\n... [output truncated to stay within MCP response limits. Ask for a specific section if"
     " you need more.]"
 )
 

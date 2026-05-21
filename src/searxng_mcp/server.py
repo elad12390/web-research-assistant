@@ -614,7 +614,7 @@ async def search_examples(
             if len(domains) == 1 and len(hits) > 2:
                 result_text += (
                     "\n\n──────────────────────────────────────────────────\n"
-                    "ℹ️ Note: All results are from the same source. Your SearXNG instance may need\n"
+                    "Note: All results are from the same source. Your SearXNG instance may need\n"
                     "   additional search engines configured (GitHub, Stack Overflow, dev.to, Medium)\n"
                     "   to get diverse code examples and tutorials."
                 )
