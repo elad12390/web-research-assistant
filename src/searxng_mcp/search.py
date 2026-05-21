@@ -71,7 +71,13 @@ class SearxSearcher:
 
         for attempt in range(MAX_RETRIES):
             try:
-                async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
+                # trust_env=False prevents HTTP(S)_PROXY env vars from routing
+                # local SearXNG calls through an external proxy (which returns
+                # 501 for loopback targets). The SearXNG URL is always local
+                # infrastructure controlled by SEARXNG_BASE_URL.
+                async with httpx.AsyncClient(
+                    timeout=self.timeout, headers=self._headers, trust_env=False
+                ) as client:
                     response = await client.get(self.base_url, params=params)
                     response.raise_for_status()
                     payload = response.json()
