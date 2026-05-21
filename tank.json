@@ -1,17 +1,13 @@
 {
   "name": "@elad12390/web-research-assistant",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "MCP server for web research with 14 tools: SearXNG + Exa AI search, URL crawling, stealth scraping (Cloudflare bypass), package registry lookup (npm/PyPI/crates), GitHub stats, changelog fetching, tech comparison, error translation, API docs discovery, stock image search, and service health. Triggers: web search, find packages, crawl url, scrape website, translate error, compare frameworks, stock images, service status, search github, api docs.",
   "permissions": {
     "network": {
-      "outbound": [
-        "*"
-      ]
+      "outbound": ["*"]
     },
     "filesystem": {
-      "read": [
-        "**/*"
-      ],
+      "read": ["**/*"],
       "write": []
     },
     "subprocess": true
@@ -21,39 +17,13 @@
     {
       "kind": "tool",
       "name": "web-research-assistant",
-      "extensions": {
-        "claude-code": {
-          "command": "uvx",
-          "args": [
-            "web-research-assistant"
-          ],
-          "env": {
-            "EXA_API_KEY": "${EXA_API_KEY}",
-            "PIXABAY_API_KEY": "${PIXABAY_API_KEY}",
-            "SEARXNG_BASE_URL": "${SEARXNG_BASE_URL:-http://localhost:2288/search}"
-          }
-        },
-        "opencode": {
-          "command": "uvx",
-          "args": [
-            "web-research-assistant"
-          ],
-          "env": {
-            "EXA_API_KEY": "${EXA_API_KEY}",
-            "PIXABAY_API_KEY": "${PIXABAY_API_KEY}",
-            "SEARXNG_BASE_URL": "${SEARXNG_BASE_URL:-http://localhost:2288/search}"
-          }
-        },
-        "cursor": {
-          "command": "uvx",
-          "args": [
-            "web-research-assistant"
-          ],
-          "env": {
-            "EXA_API_KEY": "${EXA_API_KEY}",
-            "PIXABAY_API_KEY": "${PIXABAY_API_KEY}",
-            "SEARXNG_BASE_URL": "${SEARXNG_BASE_URL:-http://localhost:2288/search}"
-          }
+      "mcp": {
+        "runtime": "uvx",
+        "package": "web-research-assistant",
+        "env": {
+          "EXA_API_KEY": "${EXA_API_KEY}",
+          "PIXABAY_API_KEY": "${PIXABAY_API_KEY}",
+          "SEARXNG_BASE_URL": "${SEARXNG_BASE_URL:-http://localhost:2288/search}"
         }
       }
     },
