@@ -1,13 +1,17 @@
 {
   "name": "@elad12390/web-research-assistant",
-  "version": "2.1.4",
+  "version": "2.1.5",
   "description": "MCP server for web research with 14 tools: SearXNG + Exa AI search, URL crawling, stealth scraping (Cloudflare bypass), package registry lookup (npm/PyPI/crates), GitHub stats, changelog fetching, tech comparison, error translation, API docs discovery, stock image search, and service health. Triggers: web search, find packages, crawl url, scrape website, translate error, compare frameworks, stock images, service status, search github, api docs.",
   "permissions": {
     "network": {
-      "outbound": ["*"]
+      "outbound": [
+        "*"
+      ]
     },
     "filesystem": {
-      "read": ["**/*"],
+      "read": [
+        "**/*"
+      ],
       "write": []
     },
     "subprocess": true
