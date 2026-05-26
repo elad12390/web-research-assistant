@@ -111,7 +111,7 @@ uv sync              # creates the virtual environment
 uv run crawl4ai-setup  # installs Chromium for crawl4ai
 ```
 
-> You can also use `pip install -r requirements.txt` if you prefer pip over uv.
+> You can also use `pip install -e .` if you prefer pip over uv (deps come from `pyproject.toml`).
 
 ## Installation
 
