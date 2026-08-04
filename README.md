@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/elad12390-web-research-assistant-badge.png)](https://mseep.ai/app/elad12390-web-research-assistant)
+
 # Web Research Assistant MCP Server
 
 [![PyPI](https://img.shields.io/pypi/v/web-research-assistant?color=blue)](https://pypi.org/project/web-research-assistant/)
