@@ -18,7 +18,7 @@ description: |
 ## Summary
 
 A Model Context Protocol server providing 14 research tools, 4 resources, and 5 prompts for AI agents.
-Works with SearXNG (local search), Exa AI (neural search), Crawl4AI (page extraction), Pixabay (images),
+Works with SearXNG (local search), Exa AI (neural search), Scrapling (page extraction), Pixabay (images),
 and direct registry/GitHub APIs.
 
 ## Installation

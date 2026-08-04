@@ -38,8 +38,8 @@ The Docker setup includes:
    - Optimized for AI research
 
 2. **Web Research Assistant MCP Server**
-   - Python MCP server with 13 tools
-   - Crawl4AI with Playwright and Chromium
+   - Python MCP server with 14 tools
+   - Scrapling with Playwright and Chromium
    - All dependencies pre-installed
 
 ## Configuration
@@ -211,9 +211,9 @@ docker system prune -a
                │ stdio / network
 ┌──────────────▼──────────────────────┐
 │  web-research-assistant container   │
-│  - Python 3.11                      │
+│  - Python 3.14                      │
 │  - MCP server                       │
-│  - crawl4ai + Playwright            │
+│  - Scrapling + Playwright           │
 │  - Chromium browser                 │
 └──────────────┬──────────────────────┘
                │ HTTP
