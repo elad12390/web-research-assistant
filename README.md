@@ -6,8 +6,8 @@
 [![CI](https://github.com/elad12390/web-research-assistant/workflows/CI/badge.svg)](https://github.com/elad12390/web-research-assistant/actions)
 
 Comprehensive Model Context Protocol (MCP) server that provides web research and discovery capabilities.
-Includes **13 tools**, **4 resources**, and **5 prompts** for searching, crawling, and analyzing web content, powered by your local Docker SearXNG 
-instance, [Exa AI](https://exa.ai/) neural search, the [`crawl4ai`](https://github.com/unclecode/crawl4ai) project, and Pixabay API:
+Includes **14 tools**, **4 resources**, and **5 prompts** for searching, crawling, and analyzing web content, powered by your local Docker SearXNG
+instance, [Exa AI](https://exa.ai/) neural search, [Scrapling](https://github.com/D4Vinci/Scrapling), and Pixabay API:
 
 1. `web_search` &mdash; federated search across multiple engines via SearXNG
 2. `search_examples` &mdash; find code examples, tutorials, and articles (defaults to recent content)
@@ -101,14 +101,14 @@ This starts both SearXNG and the MCP server in containers. See [DOCKER_SETUP.md]
 
 - **Exa API key** for neural search - [Get API key](https://dashboard.exa.ai/api-keys) (recommended for better search results)
 - **Pixabay API key** for image search - [Get free key](https://pixabay.com/api/docs/)
-- **Playwright browsers** for advanced crawling (auto-installed with `crawl4ai-setup`)
+- **Playwright browsers** for advanced crawling (installed with `scrapling install`)
 
 ### Developer Setup (if running from source)
 
 ```bash
 uv tool install uv  # if you do not already have uv
-uv sync              # creates the virtual environment
-uv run crawl4ai-setup  # installs Chromium for crawl4ai
+uv sync --all-extras --all-groups  # creates the virtual environment
+uv run scrapling install           # installs Chromium for Scrapling
 ```
 
 > You can also use `pip install -e .` if you prefer pip over uv (deps come from `pyproject.toml`).
@@ -316,14 +316,14 @@ web-research-assistant/
 │   ├── config.py        # Configuration and environment
 │   ├── search.py        # SearXNG integration
 │   ├── exa.py           # Exa AI neural search client
-│   ├── crawler.py       # Crawl4AI wrapper
+│   ├── crawler.py       # Scrapling wrapper
 │   ├── images.py        # Pixabay client
 │   ├── registry.py      # Package registries (npm, PyPI, crates, Go)
 │   ├── github.py        # GitHub API client
 │   ├── errors.py        # Error parser (language/framework detection)
 │   ├── api_docs.py      # API docs discovery (NO hardcoded URLs)
 │   ├── tracking.py      # Usage analytics
-│   └── server.py        # MCP server + 13 tools
+│   └── server.py        # MCP server + 14 tools
 ├── docs/                # Documentation (27 files)
 └── [config files]
 ```

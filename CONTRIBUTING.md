@@ -16,10 +16,10 @@ Thanks for your interest in contributing! This MCP server helps AI agents perfor
    curl -LsSf https://astral.sh/uv/install.sh | sh
    
    # Install dependencies (including dev dependencies)
-   uv sync --all-extras
+   uv sync --all-extras --all-groups
    
-   # Install Playwright browsers for crawl4ai
-   uv run crawl4ai-setup
+   # Install Playwright browsers for Scrapling
+   uv run scrapling install
    ```
 
 3. **Set up SearXNG**
@@ -85,7 +85,7 @@ web-research-assistant/
 ├── src/searxng_mcp/     # Source code
 │   ├── server.py        # MCP server + tool definitions
 │   ├── search.py        # SearXNG integration
-│   ├── crawler.py       # Crawl4AI wrapper
+│   ├── crawler.py       # Scrapling wrapper
 │   ├── registry.py      # Package registries (npm, PyPI, etc.)
 │   ├── github.py        # GitHub API client
 │   ├── images.py        # Pixabay client
