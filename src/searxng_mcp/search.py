@@ -89,7 +89,9 @@ class SearxSearcher:
                     ).strip()
                     url = item.get("url") or ""
                     snippet = (item.get("content") or item.get("snippet") or "").strip()
-                    snippet = clamp_text(snippet, MAX_SNIPPET_CHARS, suffix="...") if snippet else ""
+                    snippet = (
+                        clamp_text(snippet, MAX_SNIPPET_CHARS, suffix="...") if snippet else ""
+                    )
                     hits.append(SearchHit(title=title, url=url, snippet=snippet))
 
                 return hits

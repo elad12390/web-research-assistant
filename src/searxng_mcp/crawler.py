@@ -6,7 +6,6 @@ import time
 import urllib.parse
 from dataclasses import dataclass
 from enum import Enum
-
 from typing import Any
 
 import html2text
