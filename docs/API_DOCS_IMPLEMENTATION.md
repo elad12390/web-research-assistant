@@ -184,7 +184,7 @@ API Documentation: FastAPI - dependencies
 | Success Rate | 75%+ | Depends on API having standard docs |
 | Content Quality | ⭐⭐⭐⭐⭐ | Real documentation with examples |
 | Discovery Accuracy | High | Pattern matching works well |
-| Crawl Success | High | Crawl4AI handles most sites |
+| Crawl Success | High | Scrapling handles most sites |
 
 **Breakdown:**
 - URL Discovery: 2-4 seconds (tries multiple patterns)
@@ -254,7 +254,7 @@ q (string, optional)
 
 4. **Dynamic Content**
    - JavaScript-heavy sites may not crawl well
-   - Mitigation: Crawl4AI handles most JS rendering
+   - Mitigation: Scrapling handles most JS rendering
 
 ---
 

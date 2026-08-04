@@ -44,7 +44,7 @@
 - **Status:** Production
 - **Performance:** ~1 second
 - **Use Case:** Daily (10+ times/day)
-- **Quality:** Excellent (Crawl4AI)
+- **Quality:** Excellent (Scrapling)
 
 ### 5. package_info ⭐⭐⭐⭐⭐
 - **Status:** Production
@@ -115,7 +115,7 @@
 src/searxng_mcp/
 ├── config.py          (100 lines)  - Configuration
 ├── search.py          (150 lines)  - SearXNG integration
-├── crawler.py         (180 lines)  - Crawl4AI wrapper
+├── crawler.py         - Scrapling wrapper
 ├── images.py          (200 lines)  - Pixabay client
 ├── registry.py        (250 lines)  - Package registries
 ├── github.py          (220 lines)  - GitHub API
@@ -129,7 +129,7 @@ src/searxng_mcp/
 
 ### Dependencies
 - SearXNG (Docker) - Web search
-- Crawl4AI - Page crawling
+- Scrapling - Page crawling
 - httpx - HTTP client
 - FastMCP - MCP server framework
 - Pixabay API (optional) - Images
@@ -335,11 +335,11 @@ src/searxng_mcp/
 # Install dependencies
 uv sync
 
-# Install Crawl4AI browsers
-uv run crawl4ai-setup
+# Install Scrapling browsers
+uv run scrapling install
 
 # Run server
-uv run searxng-mcp
+uv run web-research-assistant
 ```
 
 ### Integration
