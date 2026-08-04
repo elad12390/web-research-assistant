@@ -1,34 +1,25 @@
 # Dockerfile for Web Research Assistant MCP Server
-FROM python:3.11-slim
+FROM python:3.14-slim
+
+COPY --from=ghcr.io/astral-sh/uv:0.12.1 /uv /uvx /bin/
 
 # Set working directory
 WORKDIR /app
-
-# Install system dependencies needed for crawl4ai
-RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
-    ca-certificates \
-    curl \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
 
 # Copy dependency files first (for better layer caching)
 COPY requirements.txt pyproject.toml ./
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
-# Install crawl4ai browser dependencies
-RUN pip install --no-cache-dir playwright && \
-    playwright install chromium && \
-    playwright install-deps chromium
+# Install Scrapling browser dependencies
+RUN playwright install --with-deps chromium
 
 # Copy source code
 COPY src/ ./src/
 
-# Install the package in development mode
-RUN pip install -e .
+# Install the package without re-resolving dependencies
+RUN uv pip install --system --no-cache --no-deps .
 
 # Set environment variables with defaults
 ENV SEARXNG_BASE_URL="http://searxng:8080/search" \
