@@ -1,21 +1,38 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
+from functools import partial
 from typing import Annotated, Literal
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+from pydantic import Field
 
 from .api_docs import APIDocsDetector, APIDocsExtractor, APIDocumentation
+from .batch import (
+    CRAWL_CONCURRENCY,
+    MAX_BATCH_QUERIES,
+    MAX_BATCH_URLS,
+    SEARCH_CONCURRENCY,
+    RecentCalls,
+    page_body,
+    page_window,
+    run_bounded,
+    split_budget,
+    unique,
+)
 from .cache import api_docs_cache
 from .changelog import ChangelogFetcher
 from .comparison import CATEGORY_ASPECTS, TechComparator, detect_category
 from .config import (
+    BATCH_TIMEOUT_SECONDS,
     CRAWL_MAX_CHARS,
     DEFAULT_CATEGORY,
     DEFAULT_MAX_RESULTS,
+    MAX_BATCH_RESPONSE_CHARS,
     MAX_RESPONSE_CHARS,
     PROXY_URL,
     SEARCH_PROVIDER,
@@ -28,12 +45,13 @@ from .exa import ExaSearcher
 from .extractor import DataExtractor
 from .github import GitHubClient, RepoInfo
 from .images import PixabayClient
+from .instructions import SERVER_INSTRUCTIONS
 from .registry import PackageInfo, PackageRegistryClient
 from .search import SearchHit, SearxSearcher
 from .service_health import ServiceHealthChecker
 from .tracking import get_tracker
 
-mcp = FastMCP("web-research-assistant")
+mcp = FastMCP("web-research-assistant", instructions=SERVER_INSTRUCTIONS)
 searxng_searcher = SearxSearcher()
 exa_searcher = ExaSearcher()
 crawler_client = CrawlerClient()
@@ -135,10 +153,47 @@ changelog_fetcher = ChangelogFetcher(github_client, registry_client)
 service_health_checker = ServiceHealthChecker(crawler_client)
 tracker = get_tracker()
 domain_tracker = get_domain_health_tracker()
+recent_calls = RecentCalls()
+
+_BATCH_HINTS = {
+    "crawl_url": (
+        "[BATCH THIS: {others} other crawl_url calls in the last 2 minutes fetched different"
+        " URLs. To read several pages, call batch_crawl_urls ONCE with every URL in `urls`.]\n\n"
+    ),
+    "web_search": (
+        "[BATCH THIS: {others} other web_search calls in the last 2 minutes ran different"
+        " queries. To run several searches, call batch_web_search ONCE with every query in"
+        " `queries`.]\n\n"
+    ),
+}
+
+
+def _batch_hint(tool: str, target: str) -> str:
+    """Point an agent that loops a single-item tool at its batch tool."""
+    others = recent_calls.note(tool, target)
+    return _BATCH_HINTS[tool].format(others=others) if others >= 2 else ""
 
 
 def _record_domain_health(result: FetchResult) -> None:
     domain_tracker.record(result)
+
+
+def _fetch_limit(start_char: int, max_chars: int) -> int:
+    return min(start_char + max_chars + 1, 200_001)
+
+
+def _describe_failed_fetch(url: str, fetch_result: FetchResult) -> str:
+    if fetch_result.status == FetchStatus.BLOCKED:
+        message = (
+            f"Blocked by anti-bot protection on {fetch_result.domain} "
+            f"(HTTP {fetch_result.http_status}). Tried: {fetch_result.method.value}."
+        )
+        if fetch_result.error_message:
+            message += f" {fetch_result.error_message}"
+        return message
+    if fetch_result.status == FetchStatus.RATE_LIMITED:
+        return f"Rate limited by {fetch_result.domain} (HTTP 429). Please wait and retry."
+    return f"Crawl failed for {url}: {fetch_result.error_message or fetch_result.status.value}"
 
 
 def _format_search_hits(hits):
@@ -150,17 +205,35 @@ def _format_search_hits(hits):
     return clamp_text(body, MAX_RESPONSE_CHARS)
 
 
+def _page_content(content: str, start_char: int, max_chars: int) -> str:
+    page, next_start = page_window(content, start_char, max_chars)
+    if not page and start_char:
+        return f"No content at start_char={start_char}; the page is shorter than that offset."
+    if next_start is not None:
+        page += f"\n\n... [page continues; call crawl_url again with start_char={next_start}.]"
+    return page
+
+
 @mcp.tool()
 async def web_search(
-    query: Annotated[str, "Natural-language web query"],
-    reasoning: Annotated[str, "Why you're using this tool (required for analytics)"],
+    query: Annotated[str, Field(description="Natural-language web query")],
+    reasoning: Annotated[
+        str, Field(description="Optional reason for the search; used only for local analytics")
+    ] = "",
     category: Annotated[
-        str, "Optional category (general, images, news, it, science, etc.)"
+        str, Field(description="Optional category (general, images, news, it, science, etc.)")
     ] = DEFAULT_CATEGORY,
-    max_results: Annotated[int, "How many ranked hits to return (1-10)"] = DEFAULT_MAX_RESULTS,
+    max_results: Annotated[
+        int, Field(description="How many ranked hits to return (1-10)")
+    ] = DEFAULT_MAX_RESULTS,
 ) -> str:
-    """Use this first to gather fresh web search results via the local SearXNG instance."""
+    """Use this first to gather fresh web search results for ONE query.
 
+    Running 2+ searches? Do NOT call this once per query: call batch_web_search once with all
+    of them.
+    """
+
+    hint = _batch_hint("web_search", query)
     start_time = time.time()
     success = False
     error_msg = None
@@ -195,22 +268,149 @@ async def web_search(
             response_size=len(result.encode("utf-8")),
         )
 
+    return hint + result
+
+
+@mcp.tool()
+async def batch_web_search(
+    queries: Annotated[
+        list[str],
+        Field(
+            min_length=1,
+            max_length=MAX_BATCH_QUERIES,
+            description=(
+                f"Every search to run, up to {MAX_BATCH_QUERIES} queries: different phrasings,"
+                " or one per candidate library or project. Build this list in your loop, then"
+                " call once."
+            ),
+        ),
+    ],
+    reasoning: Annotated[
+        str, Field(description="Optional reason for the searches; used only for local analytics")
+    ] = "",
+    category: Annotated[
+        str, Field(description="Category for every query (general, news, it, science, etc.)")
+    ] = DEFAULT_CATEGORY,
+    max_results: Annotated[
+        int, Field(description="Ranked hits per query (1-10)")
+    ] = DEFAULT_MAX_RESULTS,
+) -> str:
+    """Run many web searches in ONE call. Use INSTEAD of calling web_search more than once.
+
+    Runs every query in parallel and returns each query's ranked hits (title, URL, snippet), in
+    request order. A query that fails does not stop the others. Then read the pages you pick
+    with one batch_crawl_urls call.
+
+    Example: batch_web_search(queries=["rust embedded document database",
+    "sqlite json document store rust crate"])
+    """
+
+    start_time = time.time()
+    targets = unique(queries)
+    result = ""
+    error_msg = None
+    answered = 0
+
+    try:
+        if not targets:
+            raise ValueError("every query is blank; send at least one search query.")
+        outcomes = await run_bounded(
+            [
+                partial(unified_search, query, category=category, max_results=max_results)
+                for query in targets
+            ],
+            concurrency=SEARCH_CONCURRENCY,
+            timeout=BATCH_TIMEOUT_SECONDS,
+        )
+
+        share = max(1000, MAX_BATCH_RESPONSE_CHARS // len(targets))
+        sections = []
+        top_hits: list[str] = []
+        for index, (query, outcome) in enumerate(zip(targets, outcomes, strict=True)):
+            if outcome is None:
+                body = f"Timed out after {BATCH_TIMEOUT_SECONDS:g}s."
+            elif isinstance(outcome, BaseException):
+                body = f"Search failed: {outcome}"
+            else:
+                answered += 1
+                if not outcome:
+                    body = f"No results in category '{category}'."
+                else:
+                    body = clamp_text(
+                        _format_search_hits(outcome),
+                        share,
+                        suffix="\n... [more hits cut to fit the batch]",
+                    )
+                    top_hits.extend(hit.url for hit in outcome[:1] if hit.url)
+            sections.append(f"=== [{index + 1}/{len(targets)}] {query} ===\n{body}")
+
+        head = (
+            f"Batch web search: {len(targets)} queries | {answered} answered,"
+            f" {len(targets) - answered} failed | {time.time() - start_time:.1f}s"
+        )
+        skipped = len(queries) - len(targets)
+        if skipped:
+            head += f" | {skipped} duplicate or blank queries skipped"
+        parts = [head, *sections]
+        if top_hits:
+            example = json.dumps({"urls": unique(top_hits)[:3]}, ensure_ascii=False)
+            parts.append(
+                "Next: read the pages you need with ONE batch_crawl_urls call, e.g."
+                f" batch_crawl_urls {example}"
+            )
+        result = "\n\n".join(parts)
+    except Exception as exc:  # noqa: BLE001
+        error_msg = str(exc)
+        result = f"Batch web search failed: {exc}"
+    finally:
+        tracker.track_usage(
+            tool_name="batch_web_search",
+            reasoning=reasoning,
+            parameters={
+                "queries": targets,
+                "category": category,
+                "max_results": max_results,
+                "answered": answered,
+                "provider": SEARCH_PROVIDER,
+            },
+            response_time_ms=(time.time() - start_time) * 1000,
+            success=answered > 0,
+            error_message=error_msg,
+            response_size=len(result.encode("utf-8")),
+        )
+
     return result
 
 
 @mcp.tool()
 async def crawl_url(
-    url: Annotated[str, "HTTP(S) URL (ideally from web_search output)"],
-    reasoning: Annotated[str, "Why you're crawling this URL (required for analytics)"],
-    max_chars: Annotated[int, "Trim textual result to this many characters"] = CRAWL_MAX_CHARS,
+    url: Annotated[str, Field(description="HTTP(S) URL (ideally from web_search output)")],
+    reasoning: Annotated[
+        str, Field(description="Optional reason for the crawl; used only for local analytics")
+    ] = "",
+    max_chars: Annotated[
+        int, Field(description="Trim textual result to this many characters")
+    ] = CRAWL_MAX_CHARS,
+    start_char: Annotated[
+        int,
+        Field(
+            description="Character offset for continuing a previously truncated page (starts at 0)"
+        ),
+    ] = 0,
     country: Annotated[
         str,
-        "ISO 3166-1 alpha-2 country code to route proxy through (e.g. 'IL', 'DE', 'US')."
-        " Auto-detected from domain ccTLD if not specified.",
+        Field(
+            description="ISO 3166-1 alpha-2 country code to route proxy through (e.g. 'IL', 'DE', 'US')."
+            " Auto-detected from domain ccTLD if not specified."
+        ),
     ] = "",
 ) -> str:
-    """Fetch a URL and return the page text as markdown for quoting or analysis."""
+    """Fetch ONE URL as markdown. Use start_char to continue a long page without refetch guesswork.
 
+    Reading 2+ pages? Do NOT call this once per URL: call batch_crawl_urls once with all of them.
+    """
+
+    hint = _batch_hint("crawl_url", url)
     start_time = time.time()
     success = False
     error_msg = None
@@ -218,26 +418,19 @@ async def crawl_url(
     fetch_result: FetchResult | None = None
 
     try:
+        max_chars = max(1, min(max_chars, MAX_RESPONSE_CHARS))
+        start_char = max(0, start_char)
         fetch_result = await crawler_client.resilient_fetch(
-            url, max_chars=max_chars, country=country
+            url, max_chars=_fetch_limit(start_char, max_chars), country=country
         )
         _record_domain_health(fetch_result)
 
         if fetch_result.status == FetchStatus.OK:
-            result = clamp_text(fetch_result.content, MAX_RESPONSE_CHARS)
+            result = _page_content(fetch_result.content, start_char, max_chars)
             success = True
-        elif fetch_result.status == FetchStatus.BLOCKED:
-            result = (
-                f"Blocked by anti-bot protection on {fetch_result.domain} "
-                f"(HTTP {fetch_result.http_status}). Tried: {fetch_result.method.value}."
-            )
-        elif fetch_result.status == FetchStatus.RATE_LIMITED:
-            result = f"Rate limited by {fetch_result.domain} (HTTP 429). Please wait and retry."
         else:
             error_msg = fetch_result.error_message
-            result = (
-                f"Crawl failed for {url}: {fetch_result.error_message or fetch_result.status.value}"
-            )
+            result = _describe_failed_fetch(url, fetch_result)
     except Exception as exc:  # noqa: BLE001
         error_msg = str(exc)
         result = f"Crawl failed for {url}: {exc}"
@@ -249,6 +442,7 @@ async def crawl_url(
             parameters={
                 "url": url,
                 "max_chars": max_chars,
+                "start_char": start_char,
                 "domain": fetch_result.domain if fetch_result else "",
                 "fetch_method": fetch_result.method.value if fetch_result else "",
                 "fetch_status": fetch_result.status.value if fetch_result else "",
@@ -259,27 +453,206 @@ async def crawl_url(
             response_size=len(result.encode("utf-8")),
         )
 
+    return hint + result
+
+
+@mcp.tool()
+async def batch_crawl_urls(
+    urls: Annotated[
+        list[str],
+        Field(
+            min_length=1,
+            max_length=MAX_BATCH_URLS,
+            description=(
+                f"Every page to read, up to {MAX_BATCH_URLS} HTTP(S) URLs: search hits, READMEs,"
+                " raw.githubusercontent.com files, docs pages. Build this list in your loop,"
+                " then call once."
+            ),
+        ),
+    ],
+    reasoning: Annotated[
+        str, Field(description="Optional reason for the crawl; used only for local analytics")
+    ] = "",
+    max_chars: Annotated[
+        int,
+        Field(
+            description="Most characters to return per page. All pages also share one output"
+            " budget, so long pages may come back shorter."
+        ),
+    ] = CRAWL_MAX_CHARS,
+    start_chars: Annotated[
+        dict[str, int] | None,
+        Field(
+            description="Continue cut pages: maps a URL to the character offset to start from,"
+            ' e.g. {"https://example.com/docs": 12000}. A cut batch result ends with these'
+            " arguments ready to send."
+        ),
+    ] = None,
+    country: Annotated[
+        str,
+        Field(
+            description="ISO 3166-1 alpha-2 country code to route the proxy through for every"
+            " URL (e.g. 'IL', 'DE', 'US'). Auto-detected per domain from its ccTLD if not"
+            " specified."
+        ),
+    ] = "",
+) -> str:
+    """Read many web pages in ONE call. Use INSTEAD of calling crawl_url more than once.
+
+    Fetches every URL in parallel and returns each page as markdown, in request order. A page
+    that fails, is blocked, or times out does not stop the others. All pages share one output
+    budget: short pages come back whole and long ones are cut evenly. When pages are cut, the
+    result ends with the exact batch_crawl_urls arguments that read the rest of all of them.
+
+    Example: batch_crawl_urls(urls=["https://github.com/owner/repo",
+    "https://docs.rs/crate/name/latest"], max_chars=10000)
+    """
+
+    start_time = time.time()
+    offsets = {url.strip(): max(0, offset) for url, offset in (start_chars or {}).items()}
+    targets = unique([*urls, *offsets])
+    page_max = max(1, min(max_chars, MAX_BATCH_RESPONSE_CHARS))
+    result = ""
+    error_msg = None
+    read = 0
+    continuations: dict[str, int] = {}
+
+    try:
+        if len(targets) > MAX_BATCH_URLS:
+            raise ValueError(
+                f"{len(targets)} URLs is over the limit of {MAX_BATCH_URLS} per call; split them"
+                " into several batch_crawl_urls calls."
+            )
+        outcomes = await run_bounded(
+            [
+                partial(
+                    crawler_client.resilient_fetch,
+                    url,
+                    max_chars=_fetch_limit(offsets.get(url, 0), page_max),
+                    country=country,
+                )
+                for url in targets
+            ],
+            concurrency=CRAWL_CONCURRENCY,
+            timeout=BATCH_TIMEOUT_SECONDS,
+        )
+
+        wants = []
+        for url, outcome in zip(targets, outcomes, strict=True):
+            if isinstance(outcome, FetchResult):
+                _record_domain_health(outcome)
+            if isinstance(outcome, FetchResult) and outcome.status == FetchStatus.OK:
+                read += 1
+                body, _ = page_body(outcome.content)
+                wants.append(min(page_max, max(0, len(body) - offsets.get(url, 0))))
+            else:
+                wants.append(0)
+        # Headers, error messages and the continuation line come out of the same budget.
+        overhead = 500 + sum(3 * len(url) + 300 for url in targets)
+        shares = split_budget(wants, MAX_BATCH_RESPONSE_CHARS - overhead)
+
+        sections = []
+        for index, (url, outcome) in enumerate(zip(targets, outcomes, strict=True)):
+            label = f"=== [{index + 1}/{len(targets)}] {url}"
+            if outcome is None:
+                sections.append(
+                    f"{label} | TIMED OUT ===\nStill loading after {BATCH_TIMEOUT_SECONDS:g}s."
+                    " Retry it alone with crawl_url, or with stealth_scrape if the site blocks bots."
+                )
+            elif isinstance(outcome, BaseException):
+                sections.append(f"{label} | FAILED ===\nCrawl failed for {url}: {outcome}")
+            elif outcome.status != FetchStatus.OK:
+                sections.append(f"{label} | FAILED ===\n{_describe_failed_fetch(url, outcome)}")
+            else:
+                start = offsets.get(url, 0)
+                text, next_start = page_window(outcome.content, start, shares[index])
+                span = f"chars {start:,}-{start + len(text):,}"
+                if not text and next_start is None:
+                    sections.append(
+                        f"{label} | NO CONTENT ===\nNo content at start_char={start}; the page is"
+                        " shorter than that offset."
+                    )
+                elif next_start is None:
+                    sections.append(f"{label} | {span}, end of page ===\n{text}")
+                else:
+                    continuations[url] = next_start
+                    sections.append(
+                        f"{label} | {span}, continues at start_char={next_start} ===\n{text}"
+                    )
+
+        head = (
+            f"Batch crawl: {len(targets)} URLs | {read} read, {len(targets) - read} failed"
+            f" | {time.time() - start_time:.1f}s"
+        )
+        skipped = len(urls) - len(unique(urls))
+        if skipped:
+            head += f" | {skipped} duplicate or blank URL(s) skipped"
+        parts = [head, *sections]
+        if continuations:
+            arguments = {
+                "urls": list(continuations),
+                "start_chars": continuations,
+                "max_chars": page_max,
+            }
+            parts.append(
+                f"{len(continuations)} page(s) continue (each page is capped at max_chars and all"
+                f" pages share a {MAX_BATCH_RESPONSE_CHARS:,}-char budget). Read the rest of all"
+                f" of them in ONE call:\nbatch_crawl_urls {json.dumps(arguments, ensure_ascii=False)}"
+            )
+        result = "\n\n".join(parts)
+    except Exception as exc:  # noqa: BLE001
+        error_msg = str(exc)
+        result = f"Batch crawl failed: {exc}"
+    finally:
+        tracker.track_usage(
+            tool_name="batch_crawl_urls",
+            reasoning=reasoning,
+            parameters={
+                "urls": targets,
+                "max_chars": page_max,
+                "continued": len(offsets),
+                "read": read,
+                "cut": len(continuations),
+            },
+            response_time_ms=(time.time() - start_time) * 1000,
+            success=read > 0,
+            error_message=error_msg,
+            response_size=len(result.encode("utf-8")),
+        )
+
     return result
 
 
 @mcp.tool()
 async def stealth_scrape(
-    url: Annotated[str, "HTTP(S) URL of a page protected by anti-bot measures (Cloudflare, etc.)"],
-    reasoning: Annotated[
-        str, "Why you need stealth scraping for this URL (required for analytics)"
+    url: Annotated[
+        str,
+        Field(
+            description="HTTP(S) URL of a page protected by anti-bot measures (Cloudflare, etc.)"
+        ),
     ],
-    max_chars: Annotated[int, "Trim textual result to this many characters"] = CRAWL_MAX_CHARS,
+    reasoning: Annotated[
+        str,
+        Field(description="Optional reason for stealth scraping; used only for local analytics"),
+    ] = "",
+    max_chars: Annotated[
+        int, Field(description="Trim textual result to this many characters")
+    ] = CRAWL_MAX_CHARS,
     wait_selector: Annotated[
-        str | None, "CSS selector to wait for before extracting content"
+        str | None, Field(description="CSS selector to wait for before extracting content")
     ] = None,
     solve_cloudflare: Annotated[
-        bool, "Attempt to solve Cloudflare challenges automatically"
+        bool, Field(description="Attempt to solve Cloudflare challenges automatically")
     ] = True,
-    headless: Annotated[bool, "Run browser in headless mode (no visible window)"] = True,
+    headless: Annotated[
+        bool, Field(description="Run browser in headless mode (no visible window)")
+    ] = True,
     country: Annotated[
         str,
-        "ISO 3166-1 alpha-2 country code to route proxy through (e.g. 'IL', 'DE', 'US')."
-        " Auto-detected from domain ccTLD if not specified.",
+        Field(
+            description="ISO 3166-1 alpha-2 country code to route proxy through (e.g. 'IL', 'DE', 'US')."
+            " Auto-detected from domain ccTLD if not specified."
+        ),
     ] = "",
 ) -> str:
     """Scrape a URL using a stealth browser that bypasses anti-bot protections.
@@ -441,11 +814,13 @@ def _format_package_info(info: PackageInfo) -> str:
 
 @mcp.tool()
 async def package_info(
-    name: Annotated[str, "Package or module name to look up"],
-    reasoning: Annotated[str, "Why you're looking up this package (required for analytics)"],
+    name: Annotated[str, Field(description="Package or module name to look up")],
+    reasoning: Annotated[
+        str, Field(description="Optional reason for the lookup; used only for local analytics")
+    ] = "",
     registry: Annotated[
         Literal["npm", "pypi", "crates", "go"],
-        "Package registry to search (npm, pypi, crates, go)",
+        Field(description="Package registry to search (npm, pypi, crates, go)"),
     ] = "npm",
 ) -> str:
     """
@@ -505,18 +880,28 @@ async def package_info(
 async def search_examples(
     query: Annotated[
         str,
-        "What you're looking for (e.g., 'Python async await examples', 'React hooks tutorial', 'Rust error handling patterns')",
+        Field(
+            description="What you're looking for (e.g., 'Python async await examples', 'React hooks tutorial', 'Rust error handling patterns')"
+        ),
     ],
-    reasoning: Annotated[str, "Why you're searching for examples (required for analytics)"],
+    reasoning: Annotated[
+        str, Field(description="Optional reason for the search; used only for local analytics")
+    ] = "",
     content_type: Annotated[
         Literal["code", "articles", "both"],
-        "Type of content to find: 'code' for code examples, 'articles' for tutorials/blogs, 'both' for mixed results",
+        Field(
+            description="Type of content to find: 'code' for code examples, 'articles' for tutorials/blogs, 'both' for mixed results"
+        ),
     ] = "both",
     time_range: Annotated[
         Literal["day", "week", "month", "year", "all"],
-        "How recent the content should be (use 'all' for best results, filter down if too many results)",
+        Field(
+            description="How recent the content should be (use 'all' for best results, filter down if too many results)"
+        ),
     ] = "all",
-    max_results: Annotated[int, "How many results to return (1-10)"] = DEFAULT_MAX_RESULTS,
+    max_results: Annotated[
+        int, Field(description="How many results to return (1-10)")
+    ] = DEFAULT_MAX_RESULTS,
 ) -> str:
     """
     Search for code examples, tutorials, and technical articles.
@@ -650,18 +1035,22 @@ async def search_examples(
 async def search_images(
     query: Annotated[
         str,
-        "What to search for (e.g., 'sunset beach', 'office workspace', 'technology abstract')",
+        Field(
+            description="What to search for (e.g., 'sunset beach', 'office workspace', 'technology abstract')"
+        ),
     ],
-    reasoning: Annotated[str, "Why you're searching for images (required for analytics)"],
+    reasoning: Annotated[
+        str, Field(description="Optional reason for the search; used only for local analytics")
+    ] = "",
     image_type: Annotated[
         Literal["all", "photo", "illustration", "vector"],
-        "Type of image to search for",
+        Field(description="Type of image to search for"),
     ] = "all",
     orientation: Annotated[
         Literal["all", "horizontal", "vertical"],
-        "Image orientation preference",
+        Field(description="Image orientation preference"),
     ] = "all",
-    max_results: Annotated[int, "Maximum number of results (1-20)"] = 10,
+    max_results: Annotated[int, Field(description="Maximum number of results (1-20)")] = 10,
 ) -> str:
     """
     Search for high-quality stock images using Pixabay.
@@ -832,14 +1221,20 @@ def _format_package_search_results(packages: list[PackageInfo], query: str, regi
 async def package_search(
     query: Annotated[
         str,
-        "Search keywords (e.g., 'web framework', 'json parser', 'machine learning')",
+        Field(
+            description="Search keywords (e.g., 'web framework', 'json parser', 'machine learning')"
+        ),
     ],
-    reasoning: Annotated[str, "Why you're searching for packages (required for analytics)"],
+    reasoning: Annotated[
+        str, Field(description="Optional reason for the search; used only for local analytics")
+    ] = "",
     registry: Annotated[
         Literal["npm", "pypi", "crates", "go"],
-        "Package registry to search (npm, pypi, crates, go)",
+        Field(description="Package registry to search (npm, pypi, crates, go)"),
     ] = "npm",
-    max_results: Annotated[int, "Maximum number of results to return (1-10)"] = 5,
+    max_results: Annotated[
+        int, Field(description="Maximum number of results to return (1-10)")
+    ] = 5,
 ) -> str:
     """
     Search for packages by keywords or description across registries.
@@ -932,9 +1327,11 @@ def _format_repo_info(info: RepoInfo, commits=None) -> str:
 
 @mcp.tool()
 async def github_repo(
-    repo: Annotated[str, "GitHub repository (owner/repo format or full URL)"],
-    reasoning: Annotated[str, "Why you're checking this repository (required for analytics)"],
-    include_commits: Annotated[bool, "Include recent commit history"] = True,
+    repo: Annotated[str, Field(description="GitHub repository (owner/repo format or full URL)")],
+    reasoning: Annotated[
+        str, Field(description="Optional reason for the lookup; used only for local analytics")
+    ] = "",
+    include_commits: Annotated[bool, Field(description="Include recent commit history")] = True,
 ) -> str:
     """
     Fetch GitHub repository information and health metrics.
@@ -1034,13 +1431,19 @@ async def github_repo(
 
 @mcp.tool()
 async def translate_error(
-    error_message: Annotated[str, "The error message or stack trace to investigate"],
-    reasoning: Annotated[str, "Why you're investigating this error (required for analytics)"],
-    language: Annotated[str | None, "Programming language (auto-detected if not provided)"] = None,
-    framework: Annotated[
-        str | None, "Framework context (e.g., 'React', 'FastAPI', 'Django')"
+    error_message: Annotated[
+        str, Field(description="The error message or stack trace to investigate")
+    ],
+    reasoning: Annotated[
+        str, Field(description="Optional reason for the search; used only for local analytics")
+    ] = "",
+    language: Annotated[
+        str | None, Field(description="Programming language (auto-detected if not provided)")
     ] = None,
-    max_results: Annotated[int, "Number of solutions to return (1-10)"] = 5,
+    framework: Annotated[
+        str | None, Field(description="Framework context (e.g., 'React', 'FastAPI', 'Django')")
+    ] = None,
+    max_results: Annotated[int, Field(description="Number of solutions to return (1-10)")] = 5,
 ) -> str:
     """
     Find solutions for error messages and stack traces from Stack Overflow and GitHub.
@@ -1217,13 +1620,19 @@ async def translate_error(
 
 @mcp.tool()
 async def api_docs(
-    api_name: Annotated[str, "API name (e.g., 'stripe', 'github') or base docs URL"],
-    reasoning: Annotated[str, "Why you're looking up this API (required for analytics)"],
+    api_name: Annotated[
+        str, Field(description="API name (e.g., 'stripe', 'github') or base docs URL")
+    ],
     topic: Annotated[
         str,
-        "What to search for (e.g., 'create customer', 'webhooks', 'authentication')",
+        Field(
+            description="What to search for (e.g., 'create customer', 'webhooks', 'authentication')"
+        ),
     ],
-    max_results: Annotated[int, "Number of doc pages to fetch (1-3)"] = 2,
+    reasoning: Annotated[
+        str, Field(description="Optional reason for the lookup; used only for local analytics")
+    ] = "",
+    max_results: Annotated[int, Field(description="Number of doc pages to fetch (1-3)")] = 2,
 ) -> str:
     """
     Search and fetch official API documentation with examples and explanations.
@@ -1500,17 +1909,21 @@ async def api_docs(
 
 @mcp.tool()
 async def extract_data(
-    url: Annotated[str, "HTTP(S) URL to extract structured data from"],
-    reasoning: Annotated[str, "Why you're extracting data from this URL (required for analytics)"],
+    url: Annotated[str, Field(description="HTTP(S) URL to extract structured data from")],
+    reasoning: Annotated[
+        str, Field(description="Optional reason for extraction; used only for local analytics")
+    ] = "",
     extract_type: Annotated[
         Literal["table", "list", "fields", "json-ld", "auto"],
-        'Extraction type: "table", "list", "fields", "json-ld", or "auto"',
+        Field(description='Extraction type: "table", "list", "fields", "json-ld", or "auto"'),
     ] = "auto",
     selectors: Annotated[
         dict[str, str] | None,
-        "CSS selectors for field extraction (only used with extract_type='fields')",
+        Field(
+            description="CSS selectors for field extraction (only used with extract_type='fields')"
+        ),
     ] = None,
-    max_items: Annotated[int, "Maximum number of items to extract"] = 100,
+    max_items: Annotated[int, Field(description="Maximum number of items to extract")] = 100,
 ) -> str:
     """
     Extract structured data from web pages.
@@ -1616,17 +2029,21 @@ async def extract_data(
 
 @mcp.tool()
 async def compare_tech(
-    technologies: Annotated[list[str], "List of 2-5 technologies to compare"],
-    reasoning: Annotated[str, "Why you're comparing these technologies (required for analytics)"],
+    technologies: Annotated[list[str], Field(description="List of 2-5 technologies to compare")],
+    reasoning: Annotated[
+        str, Field(description="Optional reason for comparison; used only for local analytics")
+    ] = "",
     category: Annotated[
         Literal["framework", "library", "database", "language", "tool", "auto"],
-        'Technology category (auto-detects if "auto")',
+        Field(description='Technology category (auto-detects if "auto")'),
     ] = "auto",
     aspects: Annotated[
         list[str] | None,
-        "Specific aspects to compare (auto-selected if not provided)",
+        Field(description="Specific aspects to compare (auto-selected if not provided)"),
     ] = None,
-    max_results_per_tech: Annotated[int, "Maximum search results per technology"] = 3,
+    max_results_per_tech: Annotated[
+        int, Field(description="Maximum search results per technology")
+    ] = 3,
 ) -> str:
     """
     Compare multiple technologies, frameworks, or libraries side-by-side.
@@ -1716,10 +2133,14 @@ async def compare_tech(
 
 @mcp.tool()
 async def get_changelog(
-    package: Annotated[str, "Package name (e.g., react, fastapi)"],
-    reasoning: Annotated[str, "Why you're checking the changelog"],
-    registry: Annotated[Literal["npm", "pypi", "auto"], "Package registry"] = "auto",
-    max_releases: Annotated[int, "Maximum releases to fetch"] = 5,
+    package: Annotated[str, Field(description="Package name (e.g., react, fastapi)")],
+    reasoning: Annotated[
+        str, Field(description="Optional reason for the lookup; used only for local analytics")
+    ] = "",
+    registry: Annotated[
+        Literal["npm", "pypi", "auto"], Field(description="Package registry")
+    ] = "auto",
+    max_releases: Annotated[int, Field(description="Maximum releases to fetch")] = 5,
 ) -> str:
     """Get changelog and release notes for a package."""
     import json
@@ -1731,10 +2152,6 @@ async def get_changelog(
     detected_registry = registry
 
     try:
-        # Auto-detect registry
-        if registry == "auto":
-            detected_registry = "npm"  # Default to npm
-
         # Fetch changelog
         changelog = await changelog_fetcher.get_changelog(package, detected_registry, max_releases)
 
@@ -1769,8 +2186,10 @@ async def get_changelog(
 
 @mcp.tool()
 async def check_service_status(
-    service: Annotated[str, "Service name (e.g., stripe, aws, github, openai)"],
-    reasoning: Annotated[str, "Why you're checking service status"],
+    service: Annotated[str, Field(description="Service name (e.g., stripe, aws, github, openai)")],
+    reasoning: Annotated[
+        str, Field(description="Optional reason for the check; used only for local analytics")
+    ] = "",
 ) -> str:
     """Check if an API service or platform is experiencing issues."""
     import json

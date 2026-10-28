@@ -18,7 +18,7 @@ A tool that takes error messages, stack traces, or cryptic error codes and finds
 
 ### Parameters:
 - `error_message` (required) - The error text or stack trace
-- `reasoning` (required) - Why you're investigating this error
+- `reasoning` (optional) - Why you're investigating this error; used for local analytics
 - `language` (optional) - Programming language context (auto-detect if not provided)
 - `framework` (optional) - Framework context (e.g., "React", "FastAPI", "Django")
 - `max_results` (optional) - Number of solutions to return (default: 5)

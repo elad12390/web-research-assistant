@@ -35,8 +35,7 @@ Successfully implemented the `translate_error` tool that translates error messag
 - `README.md`
   - Updated tool count from 7 to 8
   - Added `translate_error` to tool list
-  - Updated all tool signatures to show `reasoning` as required
-  - Added note about reasoning parameter requirement
+  - Updated all tool signatures to accept analytics reasoning (now optional)
   - Added `errors.py` to development section
 
 ## Features Implemented
@@ -172,7 +171,8 @@ While the core functionality is complete, here are potential improvements:
 
 **None.** This is a new tool with no impact on existing tools.
 
-Note: A separate change (already completed) made the `reasoning` parameter required for all tools. See `REASONING_REQUIRED_CHANGE.md` for details.
+Note: The earlier requirement for `reasoning` was later reversed after retained usage data
+showed that it caused avoidable schema failures. See `REASONING_REQUIRED_CHANGE.md` for history.
 
 ## Validation Checklist
 

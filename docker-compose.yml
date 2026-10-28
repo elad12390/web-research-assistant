@@ -2,7 +2,7 @@ services:
   # SearXNG search engine
   searxng:
     container_name: searxng
-    image: searxng/searxng:latest
+    image: searxng/searxng@sha256:1f3720f59a0361592dc942e4be50e0ebb63c112d915883fcb78a011995fffb47
     ports:
       - "2288:8080"
     volumes:
@@ -43,8 +43,8 @@ services:
       - SEARXNG_DEFAULT_CATEGORY=general
       - SEARXNG_DEFAULT_RESULTS=5
       - SEARXNG_MAX_RESULTS=10
-      - SEARXNG_CRAWL_MAX_CHARS=8000
-      - MCP_MAX_RESPONSE_CHARS=8000
+      - SEARXNG_CRAWL_MAX_CHARS=12000
+      - MCP_MAX_RESPONSE_CHARS=30000
       
       # Usage logging (mounted volume)
       - MCP_USAGE_LOG=/app/data/usage.json

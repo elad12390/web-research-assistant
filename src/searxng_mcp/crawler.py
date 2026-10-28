@@ -33,6 +33,10 @@ _BLOCK_SIGNATURES = (
     "challenge-platform",
 )
 
+_MISSING_BROWSER_MESSAGE = (
+    "Stealth browser is unavailable. Run `uv run scrapling install` in the MCP environment."
+)
+
 _GENERIC_TLDS = frozenset(
     {
         "com",
@@ -199,6 +203,7 @@ class CrawlerClient:
 
         geo_code = country.upper() if country else _detect_country_code(domain)
         geo_proxy = _geo_targeted_proxy(PROXY_URL, geo_code)
+        fallback_result = normal_result
 
         if geo_proxy:
             proxy_result = await self._try_normal(
@@ -208,11 +213,17 @@ class CrawlerClient:
             proxy_result.response_time_ms = (time.monotonic() - start) * 1000
             if proxy_result.status == FetchStatus.OK:
                 return proxy_result
+            if proxy_result.status in (FetchStatus.BLOCKED, FetchStatus.RATE_LIMITED):
+                fallback_result = proxy_result
 
         stealth_result = await self._try_stealth(url, domain=domain, limit=limit, raw=raw)
         stealth_result.response_time_ms = (time.monotonic() - start) * 1000
         if stealth_result.status == FetchStatus.OK:
             return stealth_result
+        if self._is_missing_browser_error(stealth_result.error_message):
+            fallback_result.error_message = _MISSING_BROWSER_MESSAGE
+            fallback_result.response_time_ms = stealth_result.response_time_ms
+            return fallback_result
 
         if geo_proxy and stealth_result.status in (FetchStatus.BLOCKED, FetchStatus.RATE_LIMITED):
             stealth_proxy_result = await self._try_stealth(
@@ -223,6 +234,14 @@ class CrawlerClient:
             return stealth_proxy_result
 
         return stealth_result
+
+    @staticmethod
+    def _is_missing_browser_error(error_message: str | None) -> bool:
+        if not error_message:
+            return False
+        return error_message == _MISSING_BROWSER_MESSAGE or (
+            "Executable doesn't exist" in error_message and "playwright install" in error_message
+        )
 
     async def _try_normal(
         self,
@@ -419,12 +438,15 @@ class CrawlerClient:
 
         except Exception as e:
             elapsed_ms = (time.monotonic() - start) * 1000
+            error_message = str(e)
+            if self._is_missing_browser_error(error_message):
+                error_message = _MISSING_BROWSER_MESSAGE
             return FetchResult(
                 content="",
                 status=FetchStatus.ERROR,
                 method=FetchMethod.STEALTH,
                 domain=domain,
-                error_message=str(e),
+                error_message=error_message,
                 response_time_ms=elapsed_ms,
             )
         finally:

@@ -97,7 +97,7 @@ async def test_field_extraction():
 
         # Define selectors for common PyPI elements
         selectors = {
-            "title": "h1.package-header__name",
+            "title": "h1",
             "version": ".package-header__pip-instructions span",
             "description": ".package-description__summary",
         }
@@ -111,9 +111,7 @@ async def test_field_extraction():
                 for v in value[:3]:
                     print(f"  - {v}")
             else:
-                print(
-                    f"\n{field_name}: {value[:100] if len(str(value)) > 100 else value}"
-                )
+                print(f"\n{field_name}: {value[:100] if len(str(value)) > 100 else value}")
 
         assert len(fields) > 0, "Should extract at least one field"
         print("\n✅ Field extraction test PASSED")
@@ -178,9 +176,9 @@ async def test_auto_extraction():
         print(f"✓ Fetched {len(html)} characters of HTML")
 
         auto_data = extractor.auto_extract(html)
-        print(f"✓ Auto extraction completed")
+        print("✓ Auto extraction completed")
 
-        print(f"\nExtracted data types:")
+        print("\nExtracted data types:")
         print(f"  Tables: {len(auto_data.get('tables', []))}")
         print(f"  Lists: {len(auto_data.get('lists', []))}")
         print(f"  JSON-LD: {len(auto_data.get('json_ld', []))}")
@@ -188,13 +186,13 @@ async def test_auto_extraction():
         # Show a sample of each type
         if auto_data.get("tables"):
             table = auto_data["tables"][0]
-            print(f"\nSample table:")
+            print("\nSample table:")
             print(f"  Headers: {table['headers']}")
             print(f"  Rows: {len(table['rows'])}")
 
         if auto_data.get("lists"):
             lst = auto_data["lists"][0]
-            print(f"\nSample list:")
+            print("\nSample list:")
             print(f"  Title: {lst['title']}")
             print(f"  Items: {len(lst['items'])}")
 

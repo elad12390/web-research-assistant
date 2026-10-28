@@ -61,7 +61,7 @@ class ChangelogFetcher:
     async def get_changelog(self, package: str, registry: str, max_releases: int = 5) -> dict:
         """Get changelog for a package."""
         # Find repository
-        repo_url = await self._find_repository(package, registry)
+        repo_url, resolved_registry = await self._find_repository(package, registry)
         if not repo_url:
             return {"error": "Could not find repository", "package": package}
 
@@ -79,7 +79,7 @@ class ChangelogFetcher:
 
             return {
                 "package": package,
-                "registry": registry,
+                "registry": resolved_registry,
                 "repository": repo_url,
                 "releases": [
                     {
@@ -101,18 +101,22 @@ class ChangelogFetcher:
         except Exception as e:
             return {"error": f"Failed to fetch releases: {e}", "package": package}
 
-    async def _find_repository(self, package: str, registry: str) -> str | None:
+    async def _find_repository(self, package: str, registry: str) -> tuple[str | None, str]:
         """Find GitHub repository URL."""
-        try:
-            if registry == "npm":
-                info = await self.registry.search_npm(package)
-            elif registry == "pypi":
-                info = await self.registry.search_pypi(package)
-            else:
-                return None
-            return info.repository if info else None
-        except Exception:
-            return None
+        registries = ("npm", "pypi") if registry == "auto" else (registry,)
+        for candidate in registries:
+            try:
+                if candidate == "npm":
+                    info = await self.registry.search_npm(package)
+                elif candidate == "pypi":
+                    info = await self.registry.search_pypi(package)
+                else:
+                    continue
+                if info and info.repository:
+                    return info.repository, candidate
+            except Exception:
+                continue
+        return None, registry
 
     def _parse_repo_url(self, url: str) -> tuple[str | None, str | None]:
         """Parse owner/repo from GitHub URL."""

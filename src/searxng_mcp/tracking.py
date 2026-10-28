@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .config import _env_str
 
@@ -15,6 +17,7 @@ class UsageTracker:
         # Get tracking file path from env or use default in user's home directory
         default_path = str(Path.home() / ".config" / "web-research-assistant" / "usage.json")
         self.log_file = Path(_env_str("MCP_USAGE_LOG", default_path))
+        self._lock = threading.Lock()
         self._ensure_log_file()
 
     def _ensure_log_file(self) -> None:
@@ -37,7 +40,7 @@ class UsageTracker:
         """Read current log data."""
         try:
             with open(self.log_file, encoding="utf-8") as f:
-                return json.load(f)
+                return cast(dict[str, Any], json.load(f))
         except (FileNotFoundError, json.JSONDecodeError):
             # File is corrupted or missing — delete and recreate
             try:
@@ -63,8 +66,17 @@ class UsageTracker:
         # Ensure directory exists
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(self.log_file, "w", encoding="utf-8") as f:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=self.log_file.parent,
+            prefix=f".{self.log_file.name}.",
+            delete=False,
+        ) as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+            temporary_file = Path(f.name)
+        temporary_file.replace(self.log_file)
+        self.log_file.chmod(0o600)
 
     def track_usage(
         self,
@@ -90,6 +102,17 @@ class UsageTracker:
             "session_id": self._get_session_id(),
         }
 
+        with self._lock:
+            self._track_usage(usage_entry, response_time_ms, success, reasoning, tool_name)
+
+    def _track_usage(
+        self,
+        usage_entry: dict[str, Any],
+        response_time_ms: float,
+        success: bool,
+        reasoning: str,
+        tool_name: str,
+    ) -> None:
         data = self._read_log()
 
         # Add to sessions
@@ -144,12 +167,12 @@ class UsageTracker:
     def get_usage_summary(self) -> dict[str, Any]:
         """Get current usage summary."""
         data = self._read_log()
-        return data["summary"]
+        return cast(dict[str, Any], data["summary"])
 
     def get_tool_analytics(self, tool_name: str) -> dict[str, Any] | None:
         """Get detailed analytics for a specific tool."""
         data = self._read_log()
-        return data["summary"]["tools"].get(tool_name)
+        return cast(dict[str, Any] | None, data["summary"]["tools"].get(tool_name))
 
     def get_recent_usage(self, hours: int = 24) -> list[dict[str, Any]]:
         """Get usage from the last N hours."""

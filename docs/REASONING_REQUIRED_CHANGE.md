@@ -1,4 +1,7 @@
-# Breaking Change: Reasoning Parameter Now Required
+# Reasoning Parameter Requirement (Historical)
+
+> **Superseded:** `reasoning` is optional again. Retained usage data showed that requiring
+> analytics context caused tool-schema failures without improving tool results.
 
 **Date:** November 15, 2025  
 **Change Type:** Breaking Change  
@@ -46,4 +49,3 @@ web_search("Python tutorial", reasoning="Learning Python basics")
 ## Verification
 
 All tools verified - reasoning is now required with no defaults!
-

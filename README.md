@@ -6,22 +6,27 @@
 [![CI](https://github.com/elad12390/web-research-assistant/workflows/CI/badge.svg)](https://github.com/elad12390/web-research-assistant/actions)
 
 Comprehensive Model Context Protocol (MCP) server that provides web research and discovery capabilities.
-Includes **14 tools**, **4 resources**, and **5 prompts** for searching, crawling, and analyzing web content, powered by your local Docker SearXNG
+Includes **16 tools**, **4 resources**, and **5 prompts** for searching, crawling, and analyzing web content, powered by your local Docker SearXNG
 instance, [Exa AI](https://exa.ai/) neural search, [Scrapling](https://github.com/D4Vinci/Scrapling), and Pixabay API:
 
 1. `web_search` &mdash; federated search across multiple engines via SearXNG
-2. `search_examples` &mdash; find code examples, tutorials, and articles (defaults to recent content)
-3. `search_images` &mdash; find high-quality stock photos, illustrations, and vectors via Pixabay
-4. `crawl_url` &mdash; full page content extraction with advanced crawling
-5. `package_info` &mdash; detailed package metadata from npm, PyPI, crates.io, Go
-6. `package_search` &mdash; discover packages by keywords and functionality  
-7. `github_repo` &mdash; repository health metrics and development activity
-8. `translate_error` &mdash; find solutions for error messages and stack traces from Stack Overflow (auto-detects CORS, fetch, and web errors)
-9. `api_docs` &mdash; auto-discover and crawl official API documentation with examples (works for any API - no hardcoded URLs)
-10. `extract_data` &mdash; extract structured data (tables, lists, fields, JSON-LD) from web pages with automatic detection
-11. `compare_tech` &mdash; compare technologies side-by-side with NPM downloads, GitHub stars, and aspect analysis (React vs Vue, PostgreSQL vs MongoDB, etc.)
-12. `get_changelog` &mdash; **NEW!** Get release notes and changelogs with breaking change detection (upgrade safely from version X to Y)
-13. `check_service_status` &mdash; **NEW!** Instant health checks for 25+ services (Stripe, AWS, GitHub, OpenAI, etc.) - "Is it down or just me?"
+2. `batch_web_search` &mdash; run up to 20 searches in one call instead of looping `web_search`
+3. `search_examples` &mdash; find code examples, tutorials, and articles (defaults to recent content)
+4. `search_images` &mdash; find high-quality stock photos, illustrations, and vectors via Pixabay
+5. `crawl_url` &mdash; full page content extraction with advanced crawling
+6. `batch_crawl_urls` &mdash; read up to 20 pages in parallel in one call instead of looping `crawl_url`
+7. `package_info` &mdash; detailed package metadata from npm, PyPI, crates.io, Go
+8. `package_search` &mdash; discover packages by keywords and functionality  
+9. `github_repo` &mdash; repository health metrics and development activity
+10. `translate_error` &mdash; find solutions for error messages and stack traces from Stack Overflow (auto-detects CORS, fetch, and web errors)
+11. `api_docs` &mdash; auto-discover and crawl official API documentation with examples (works for any API - no hardcoded URLs)
+12. `extract_data` &mdash; extract structured data (tables, lists, fields, JSON-LD) from web pages with automatic detection
+13. `compare_tech` &mdash; compare technologies side-by-side with NPM downloads, GitHub stars, and aspect analysis (React vs Vue, PostgreSQL vs MongoDB, etc.)
+14. `get_changelog` &mdash; **NEW!** Get release notes and changelogs with breaking change detection (upgrade safely from version X to Y)
+15. `check_service_status` &mdash; **NEW!** Instant health checks for 25+ services (Stripe, AWS, GitHub, OpenAI, etc.) - "Is it down or just me?"
+
+The server's MCP instructions tell agents to batch: several pages or searches go into one
+`batch_crawl_urls` or `batch_web_search` call, never one `crawl_url` or `web_search` call per item.
 
 All tools feature comprehensive error handling, response size limits, usage tracking, and clear documentation
 for optimal AI agent integration.
@@ -247,23 +252,29 @@ For OpenCode:
 
 | Tool | When to use | Arguments |
 | ---- | ----------- | --------- |
-| `web_search` | Use first to gather recent information and URLs from SearXNG. Returns 1&ndash;10 ranked snippets with clickable URLs. | `query` (required), `reasoning` (required), optional `category` (defaults to `general`), and `max_results` (defaults to 5). |
-| `search_examples` | Find code examples, tutorials, and technical articles. Optimized for technical content with optional time filtering. Perfect for learning APIs or finding usage patterns. | `query` (required, e.g., "Python async examples"), `reasoning` (required), `content_type` (code/articles/both, defaults to both), `time_range` (day/week/month/year/all, defaults to all), optional `max_results` (defaults to 5). |
-| `search_images` | Find high-quality royalty-free stock images from Pixabay. Returns photos, illustrations, or vectors. Requires `PIXABAY_API_KEY` environment variable. | `query` (required, e.g., "mountain landscape"), `reasoning` (required), `image_type` (all/photo/illustration/vector, defaults to all), `orientation` (all/horizontal/vertical, defaults to all), optional `max_results` (defaults to 10). |
-| `crawl_url` | Call immediately after search when you need the actual article body for quoting, summarizing, or extracting data. | `url` (required), `reasoning` (required), optional `max_chars` (defaults to 8000 characters). |
-| `package_info` | Look up specific npm, PyPI, crates.io, or Go package metadata including version, downloads, license, and dependencies. Use when you know the package name. | `name` (required package name), `reasoning` (required), `registry` (npm/pypi/crates/go, defaults to npm). |
-| `package_search` | Search for packages by keywords or functionality (e.g., "web framework", "json parser"). Use when you need to find packages that solve a specific problem. | `query` (required search terms), `reasoning` (required), `registry` (npm/pypi/crates/go, defaults to npm), optional `max_results` (defaults to 5). |
-| `github_repo` | Get GitHub repository health metrics including stars, forks, issues, recent commits, and project details. Use when evaluating open source projects. | `repo` (required, owner/repo or full URL), `reasoning` (required), optional `include_commits` (defaults to true). |
-| `translate_error` | Find Stack Overflow solutions for error messages and stack traces. Auto-detects language/framework, extracts key terms (CORS, map, undefined, etc.), filters irrelevant results, and prioritizes Stack Overflow solutions. Handles web-specific errors (CORS, fetch). | `error_message` (required stack trace or error text), `reasoning` (required), optional `language` (auto-detected), optional `framework` (auto-detected), optional `max_results` (defaults to 5). |
-| `api_docs` | Auto-discover and crawl official API documentation. Dynamically finds docs URLs using patterns (docs.{api}.com, {api}.com/docs, etc.), searches for specific topics, crawls pages, and extracts overview, parameters, examples, and related links. Works for ANY API - no hardcoded URLs. Perfect for API integration and learning. | `api_name` (required, e.g., "stripe", "react"), `topic` (required, e.g., "create customer", "hooks"), `reasoning` (required), optional `max_results` (defaults to 2 pages). |
-| `extract_data` | Extract structured data from HTML pages. Supports tables, lists, fields (via CSS selectors), JSON-LD, and auto-detection. Returns clean JSON output. More efficient than parsing full page text. Perfect for scraping pricing tables, package specs, release notes, or any structured content. | `url` (required), `reasoning` (required), `extract_type` (table/list/fields/json-ld/auto, defaults to auto), optional `selectors` (CSS selectors for fields mode), optional `max_items` (defaults to 100). |
-| `compare_tech` | Compare 2-5 technologies side-by-side. Auto-detects category (framework/database/language) and gathers data from NPM, GitHub, and web search. Returns structured comparison with popularity metrics (downloads, stars), performance insights, and best-use summaries. Fast parallel processing (3-4s). | `technologies` (required list of 2-5 names), `reasoning` (required), optional `category` (auto-detects if not provided), optional `aspects` (auto-selected by category), optional `max_results_per_tech` (defaults to 3). |
-| `get_changelog` | **NEW!** Get release notes and changelogs for package upgrades. Fetches GitHub releases, highlights breaking changes, and provides upgrade recommendations. Answers "What changed in version X → Y?" and "Are there breaking changes?" Perfect for planning dependency updates. | `package` (required name), `reasoning` (required), optional `registry` (npm/pypi/auto, defaults to auto), optional `max_releases` (defaults to 5). |
-| `check_service_status` | **NEW!** Instantly check if external services are experiencing issues. Covers 25+ popular services (Stripe, AWS, GitHub, OpenAI, Vercel, etc.). Returns operational status, current incidents, and component health. Critical for production debugging - know immediately if the issue is external. Response time < 2s. | `service` (required name, e.g., "stripe", "aws"), `reasoning` (required). |
+| `web_search` | Use first to gather recent information and URLs from SearXNG. Returns 1&ndash;10 ranked snippets with clickable URLs. | `query` (required), optional `reasoning`, `category` (defaults to `general`), and `max_results` (defaults to 5). |
+| `batch_web_search` | Use instead of calling `web_search` more than once. Runs every query in parallel and returns each query's hits in request order; a failed query does not stop the others. | `queries` (required list of 1&ndash;20), optional `reasoning`, `category`, and `max_results` per query (defaults to 5). |
+| `search_examples` | Find code examples, tutorials, and technical articles. Optimized for technical content with optional time filtering. Perfect for learning APIs or finding usage patterns. | `query` (required, e.g., "Python async examples"), optional `reasoning`, `content_type` (code/articles/both, defaults to both), `time_range` (day/week/month/year/all, defaults to all), and `max_results` (defaults to 5). |
+| `search_images` | Find high-quality royalty-free stock images from Pixabay. Returns photos, illustrations, or vectors. Requires `PIXABAY_API_KEY` environment variable. | `query` (required, e.g., "mountain landscape"), optional `reasoning`, `image_type` (all/photo/illustration/vector, defaults to all), `orientation` (all/horizontal/vertical, defaults to all), and `max_results` (defaults to 10). |
+| `crawl_url` | Call immediately after search when you need the actual article body for quoting, summarizing, or extracting data. Continue long pages with the returned `start_char` value. | `url` (required), optional `reasoning`, `max_chars` (defaults to 12000), `start_char` (defaults to 0), and `country`. |
+| `batch_crawl_urls` | Use instead of calling `crawl_url` more than once. Fetches every page in parallel and returns each one in request order; a failed, blocked, or slow page does not stop the others. | `urls` (required list of 1&ndash;20), optional `reasoning`, `max_chars` per page (defaults to 12000), `start_chars` (URL to offset map for continuing cut pages), and `country`. |
+| `package_info` | Look up specific npm, PyPI, crates.io, or Go package metadata including version, downloads, license, and dependencies. Use when you know the package name. | `name` (required package name), optional `reasoning`, and `registry` (npm/pypi/crates/go, defaults to npm). |
+| `package_search` | Search for packages by keywords or functionality (e.g., "web framework", "json parser"). Use when you need to find packages that solve a specific problem. | `query` (required search terms), optional `reasoning`, `registry` (npm/pypi/crates/go, defaults to npm), and `max_results` (defaults to 5). |
+| `github_repo` | Get GitHub repository health metrics including stars, forks, issues, recent commits, and project details. Use when evaluating open source projects. | `repo` (required, owner/repo or full URL), optional `reasoning` and `include_commits` (defaults to true). |
+| `translate_error` | Find Stack Overflow solutions for error messages and stack traces. Auto-detects language/framework, extracts key terms, filters irrelevant results, and prioritizes Stack Overflow solutions. | `error_message` (required stack trace or error text), optional `reasoning`, `language`, `framework`, and `max_results` (defaults to 5). |
+| `api_docs` | Auto-discover and crawl official API documentation, then extract overviews, parameters, examples, and related links. | `api_name` and `topic` (required), optional `reasoning` and `max_results` (defaults to 2 pages). |
+| `extract_data` | Extract tables, lists, fields, JSON-LD, or auto-detected structured data from HTML pages. | `url` (required), optional `reasoning`, `extract_type`, `selectors`, and `max_items` (defaults to 100). |
+| `compare_tech` | Compare 2-5 technologies side-by-side using package, repository, and web evidence. | `technologies` (required list of 2-5 names), optional `reasoning`, `category`, `aspects`, and `max_results_per_tech`. |
+| `get_changelog` | Get release notes, identify breaking changes, and provide upgrade guidance. Automatically tries npm and PyPI when the registry is unknown. | `package` (required name), optional `reasoning`, `registry` (defaults to auto), and `max_releases` (defaults to 5). |
+| `check_service_status` | Check whether a supported external service has an active incident. | `service` (required name), optional `reasoning`. |
 
-Results are automatically trimmed (default 8 KB) so they stay well within MCP
-response expectations. If truncation happens, the text ends with a note reminding the
-model that more detail is available on request.
+Tool responses are capped at 30,000 characters by default. `crawl_url` returns an exact
+`start_char` continuation value when a page is longer than the requested chunk.
+
+The batch tools share one 50,000-character budget across their items: short pages come back
+whole and long ones are cut evenly. A cut `batch_crawl_urls` result ends with the exact
+arguments that continue every cut page in one more call. Items still running after 45 seconds
+are reported as timed out, so the batch returns before typical 60-second client timeouts.
 
 ## Resources
 
@@ -298,8 +309,10 @@ Environment variables let you adapt the server without touching code:
 | `SEARXNG_DEFAULT_CATEGORY` | `general` | Category used when none is provided. |
 | `SEARXNG_DEFAULT_RESULTS` | `5` | Default number of search hits. |
 | `SEARXNG_MAX_RESULTS` | `10` | Hard cap on hits per request. |
-| `SEARXNG_CRAWL_MAX_CHARS` | `8000` | Default character budget for `crawl_url`. |
-| `MCP_MAX_RESPONSE_CHARS` | `8000` | Overall response limit applied to every tool reply. |
+| `SEARXNG_CRAWL_MAX_CHARS` | `12000` | Default character budget for each `crawl_url` page. |
+| `MCP_MAX_RESPONSE_CHARS` | `30000` | Overall response limit applied to every tool reply. |
+| `MCP_MAX_BATCH_RESPONSE_CHARS` | `50000` | Output budget shared by all items of one `batch_crawl_urls` or `batch_web_search` call. |
+| `BATCH_TIMEOUT_SECONDS` | `45` | Items of a batch call still running after this many seconds are reported as timed out. |
 | `SEARXNG_MCP_USER_AGENT` | `web-research-assistant/0.1` | User-Agent header for outward HTTP calls. |
 | `PIXABAY_API_KEY` | _(empty)_ | API key for Pixabay image search. Get free key at [pixabay.com/api/docs](https://pixabay.com/api/docs/). |
 | `EXA_API_KEY` | _(empty)_ | API key for Exa AI neural search. Get key at [dashboard.exa.ai](https://dashboard.exa.ai/api-keys). |
@@ -323,7 +336,9 @@ web-research-assistant/
 │   ├── errors.py        # Error parser (language/framework detection)
 │   ├── api_docs.py      # API docs discovery (NO hardcoded URLs)
 │   ├── tracking.py      # Usage analytics
-│   └── server.py        # MCP server + 14 tools
+│   ├── batch.py         # Batch tool helpers (parallel runs, shared output budget)
+│   ├── instructions.py  # MCP instructions sent to every agent
+│   └── server.py        # MCP server + 16 tools
 ├── docs/                # Documentation (27 files)
 └── [config files]
 ```
@@ -338,11 +353,9 @@ All tools automatically track usage metrics including:
 - Common use case patterns (via the `reasoning` parameter)
 - Error frequencies and types
 
-Analytics data is stored in `~/.config/web-research-assistant/usage.json` and can be analyzed
-to optimize tool usage and identify patterns. Each tool requires a `reasoning` parameter
-that helps categorize why tools are being used, enabling better analytics and insights.
-
-**Note:** As of the latest update, the `reasoning` parameter is **required** for all tools (previously optional with defaults). This ensures meaningful analytics data collection.
+Analytics data is stored in `~/.config/web-research-assistant/usage.json`. The optional
+`reasoning` parameter improves use-case grouping, but omitting analytics context never blocks
+a tool call.
 
 ## Documentation
 

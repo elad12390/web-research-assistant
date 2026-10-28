@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `batch_crawl_urls` reads up to 20 pages in parallel in one call. Pages come back in request
+  order, one failed or slow page does not stop the others, all pages share one output budget
+  (`MCP_MAX_BATCH_RESPONSE_CHARS`, default 50,000), and a cut result ends with the exact
+  arguments that continue every cut page in one more call.
+- `batch_web_search` runs up to 20 searches in parallel in one call.
+- MCP server instructions tell agents to batch instead of calling `crawl_url` or `web_search`
+  once per item. Both single-item tools point at their batch tool, and say so in their result
+  when an agent calls them for a third different item within two minutes.
+- `BATCH_TIMEOUT_SECONDS` (default 45): batch items still running are reported as timed out,
+  so a batch returns before typical 60-second client timeouts.
+
+### Changed
+- `reasoning` is optional on every tool again; requiring it caused tool-schema failures.
+- `crawl_url` continues long pages from `start_char`.
+- Default limits are now 12,000 characters per crawled page and 30,000 per response.
+- The SearXNG Docker image is pinned by digest.
+
+### Fixed
+- Tool parameter descriptions now reach agents. They were written as plain `Annotated` strings,
+  which FastMCP leaves out of the input schema.
+- A rejected `GITHUB_TOKEN` falls back to anonymous GitHub requests instead of failing.
+- `get_changelog` with `registry="auto"` tries npm, then PyPI.
+- When the stealth browser is not installed, crawls keep the normal fetch result and say how to
+  install it.
+- The usage log is written atomically and is readable only by its owner.
+
 ## [0.4.0] - 2026-01-06
 
 ### Added

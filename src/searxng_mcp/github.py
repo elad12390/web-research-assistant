@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import cast
 
 import httpx
 
 from .config import HTTP_TIMEOUT, USER_AGENT, _env_str
+
+QueryParam = str | int | float | bool | None
 
 
 @dataclass(slots=True)
@@ -44,8 +48,13 @@ class Commit:
 class GitHubClient:
     """Client for GitHub REST API with optional authentication."""
 
-    def __init__(self, timeout: float = HTTP_TIMEOUT) -> None:
+    def __init__(
+        self,
+        timeout: float = HTTP_TIMEOUT,
+        api_base_url: str = "https://api.github.com",
+    ) -> None:
         self.timeout = timeout
+        self.api_base_url = api_base_url.rstrip("/")
         self.token = _env_str("GITHUB_TOKEN", "")
 
         headers = {
@@ -58,30 +67,53 @@ class GitHubClient:
 
         self._headers = headers
 
+    async def _get_json(
+        self,
+        path: str,
+        *,
+        params: Mapping[str, QueryParam] | None = None,
+        follow_redirects: bool = False,
+    ) -> tuple[httpx.Response, object]:
+        """GET JSON, retrying anonymously when a configured token is rejected."""
+        url = f"{self.api_base_url}{path}"
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            headers=self._headers,
+            follow_redirects=follow_redirects,
+        ) as client:
+            response = await client.get(url, params=params)
+
+        if response.status_code == 401 and self.token:
+            anonymous_headers = {
+                key: value for key, value in self._headers.items() if key.lower() != "authorization"
+            }
+            self.token = ""
+            self._headers = anonymous_headers
+            async with httpx.AsyncClient(
+                timeout=self.timeout,
+                headers=anonymous_headers,
+                follow_redirects=follow_redirects,
+            ) as client:
+                response = await client.get(url, params=params)
+
+        response.raise_for_status()
+        return response, cast(object, response.json())
+
     async def _resolve_repo_redirect(self, owner: str, repo: str) -> tuple[str, str]:
         """
         Resolve repository redirects (renamed/transferred repos).
 
         GitHub API returns 301 for renamed repos with the new location in the response.
         """
-        url = f"https://api.github.com/repos/{owner}/{repo}"
-
-        async with httpx.AsyncClient(
-            timeout=self.timeout,
-            headers=self._headers,
-            follow_redirects=True,  # Follow redirects
-        ) as client:
-            response = await client.get(url)
-
-            # If we followed a redirect, extract new owner/repo from the response
-            if response.status_code == 200:
-                data = response.json()
-                new_full_name = data.get("full_name", f"{owner}/{repo}")
-                if "/" in new_full_name:
-                    new_owner, new_repo = new_full_name.split("/", 1)
-                    return new_owner, new_repo
-
-            response.raise_for_status()
+        _, data = await self._get_json(
+            f"/repos/{owner}/{repo}",
+            follow_redirects=True,
+        )
+        if isinstance(data, dict):
+            new_full_name = data.get("full_name", f"{owner}/{repo}")
+            if isinstance(new_full_name, str) and "/" in new_full_name:
+                new_owner, new_repo = new_full_name.split("/", 1)
+                return new_owner, new_repo
 
         return owner, repo
 
@@ -91,19 +123,15 @@ class GitHubClient:
         # First resolve any redirects (renamed repos)
         resolved_owner, resolved_repo = await self._resolve_repo_redirect(owner, repo)
 
-        url = f"https://api.github.com/repos/{resolved_owner}/{resolved_repo}"
-
-        async with httpx.AsyncClient(
-            timeout=self.timeout,
-            headers=self._headers,
+        _, data = await self._get_json(
+            f"/repos/{resolved_owner}/{resolved_repo}",
             follow_redirects=True,
-        ) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            data = response.json()
+        )
+        if not isinstance(data, dict):
+            raise ValueError("GitHub returned an invalid repository response")
 
         # Get open PRs count (separate API call)
-        open_prs = await self._get_open_prs_count(owner, repo)
+        open_prs = await self._get_open_prs_count(resolved_owner, resolved_repo)
 
         # Format last updated time
         updated_at = data.get("updated_at", "")
@@ -130,13 +158,10 @@ class GitHubClient:
     async def get_recent_commits(self, owner: str, repo: str, count: int = 5) -> list[Commit]:
         """Fetch recent commits from repository."""
 
-        url = f"https://api.github.com/repos/{owner}/{repo}/commits"
         params = {"per_page": count}
-
-        async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
+        _, data = await self._get_json(f"/repos/{owner}/{repo}/commits", params=params)
+        if not isinstance(data, list):
+            raise ValueError("GitHub returned an invalid commits response")
 
         commits = []
         for commit_data in data[:count]:
@@ -166,21 +191,16 @@ class GitHubClient:
         """Get count of open pull requests."""
 
         try:
-            url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
-            params = {"state": "open", "per_page": 1}
-
-            async with httpx.AsyncClient(timeout=5.0, headers=self._headers) as client:
-                response = await client.get(url, params=params)
-                if response.status_code == 200:
-                    # GitHub includes total count in Link header, but easier to count from search
-                    search_url = "https://api.github.com/search/issues"
-                    search_params = {
-                        "q": f"repo:{owner}/{repo} type:pr state:open",
-                        "per_page": 1,
-                    }
-                    search_response = await client.get(search_url, params=search_params)
-                    if search_response.status_code == 200:
-                        return search_response.json().get("total_count", 0)
+            params: dict[str, QueryParam] = {"state": "open", "per_page": 1}
+            await self._get_json(f"/repos/{owner}/{repo}/pulls", params=params)
+            search_params: dict[str, QueryParam] = {
+                "q": f"repo:{owner}/{repo} type:pr state:open",
+                "per_page": 1,
+            }
+            _, data = await self._get_json("/search/issues", params=search_params)
+            if isinstance(data, dict):
+                total_count = data.get("total_count", 0)
+                return total_count if isinstance(total_count, int) else None
         except Exception:  # noqa: BLE001, S110
             pass
         return None
@@ -319,10 +339,8 @@ class GitHubClient:
         Returns:
             List of release dictionaries with version, date, and notes
         """
-        url = f"https://api.github.com/repos/{owner}/{repo}/releases"
         params = {"per_page": min(max_releases, 100)}
-
-        async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            return response.json()
+        _, data = await self._get_json(f"/repos/{owner}/{repo}/releases", params=params)
+        if not isinstance(data, list):
+            raise ValueError("GitHub returned an invalid releases response")
+        return data

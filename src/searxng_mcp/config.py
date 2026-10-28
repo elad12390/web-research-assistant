@@ -35,8 +35,11 @@ HTTP_TIMEOUT: Final[float] = _env_float("SEARXNG_HTTP_TIMEOUT", 15.0)
 MAX_SEARCH_RESULTS: Final[int] = _env_int("SEARXNG_MAX_RESULTS", 10)
 DEFAULT_MAX_RESULTS: Final[int] = _env_int("SEARXNG_DEFAULT_RESULTS", 5)
 MAX_SNIPPET_CHARS: Final[int] = _env_int("SEARXNG_MAX_SNIPPET_CHARS", 400)
-MAX_RESPONSE_CHARS: Final[int] = _env_int("MCP_MAX_RESPONSE_CHARS", 8000)
-CRAWL_MAX_CHARS: Final[int] = _env_int("SEARXNG_CRAWL_MAX_CHARS", 8000)
+MAX_RESPONSE_CHARS: Final[int] = _env_int("MCP_MAX_RESPONSE_CHARS", 30000)
+CRAWL_MAX_CHARS: Final[int] = _env_int("SEARXNG_CRAWL_MAX_CHARS", 12000)
+# Batch tools share one output budget across items and return before typical client timeouts (60s)
+MAX_BATCH_RESPONSE_CHARS: Final[int] = _env_int("MCP_MAX_BATCH_RESPONSE_CHARS", 50000)
+BATCH_TIMEOUT_SECONDS: Final[float] = _env_float("BATCH_TIMEOUT_SECONDS", 45.0)
 PIXABAY_API_KEY: Final[str] = _env_str("PIXABAY_API_KEY", "")
 EXA_API_KEY: Final[str] = _env_str("EXA_API_KEY", "")
 
@@ -87,6 +90,8 @@ __all__ = [
     "MAX_SNIPPET_CHARS",
     "MAX_RESPONSE_CHARS",
     "CRAWL_MAX_CHARS",
+    "MAX_BATCH_RESPONSE_CHARS",
+    "BATCH_TIMEOUT_SECONDS",
     "PIXABAY_API_KEY",
     "EXA_API_KEY",
     "SEARCH_PROVIDER",
